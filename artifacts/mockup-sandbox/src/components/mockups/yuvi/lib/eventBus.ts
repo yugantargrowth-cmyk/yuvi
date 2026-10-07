@@ -17,6 +17,7 @@ const LOG_KEY = "yuvi_event_log";
 const MAX_LOG = 500;
 
 function safeParseLog(): EventRecord[] {
+  if (typeof localStorage === "undefined") return [];
   try {
     const raw = localStorage.getItem(LOG_KEY);
     return raw ? (JSON.parse(raw) as EventRecord[]) : [];
@@ -38,10 +39,12 @@ export function emit<TPayload = unknown>(type: string, payload: TPayload = {} as
   const log = safeParseLog();
   log.push(record as EventRecord);
   if (log.length > MAX_LOG) log.shift();
-  try {
-    localStorage.setItem(LOG_KEY, JSON.stringify(log));
-  } catch {
-    // storage full — non-fatal, in-memory listeners still fire below
+  if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.setItem(LOG_KEY, JSON.stringify(log));
+    } catch {
+      // storage full — non-fatal, in-memory listeners still fire below
+    }
   }
 
   (listeners.get(type) || new Set()).forEach((h) => {

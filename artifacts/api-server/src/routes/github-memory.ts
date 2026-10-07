@@ -27,7 +27,7 @@ interface GithubMemoryBody {
   message?: string;
 }
 
-router.post("/api/github/memory", async (req: Request, res: Response) => {
+router.post("/github/memory", async (req: Request, res: Response) => {
   const token = process.env.GITHUB_TOKEN;
   if (!token) {
     res.status(500).json({

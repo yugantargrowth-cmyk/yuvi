@@ -1,0 +1,156 @@
+// types/sales.ts — Unified types for YUVI OS Sales Engine, AI Employees, and Activepieces Bridge
+
+export type EmployeeId =
+  | "scout"
+  | "hunter"
+  | "spark"
+  | "publisher"
+  | "analyst"
+  | "operator"
+  | "researcher";
+
+export type TaskStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "COMPLETED"
+  | "FAILED"
+  | "WAITING_APPROVAL"
+  | "CANCELLED";
+
+export interface TaskLogEntry {
+  timestamp: string;
+  level: "info" | "warn" | "error";
+  message: string;
+}
+
+export interface EmployeeTask {
+  taskId: string;
+  employeeId: EmployeeId;
+  role: string;
+  objective: string;
+  instructions: string;
+  context: Record<string, unknown>;
+  input: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  tools: string[];
+  status: TaskStatus;
+  timestamps: {
+    createdAt: string;
+    startedAt?: string;
+    completedAt?: string;
+  };
+  retryState: {
+    retryCount: number;
+    maxRetries: number;
+    lastError?: string;
+  };
+  verificationState: {
+    verified: boolean;
+    verifiedBy?: string;
+    verificationNotes?: string;
+  };
+  logs: TaskLogEntry[];
+}
+
+export type LeadTier = "A" | "B" | "C" | "D";
+
+export type LeadStatus =
+  | "NEW"
+  | "IN_RESEARCH"
+  | "PENDING_APPROVAL"
+  | "APPROVED"
+  | "CONTACTED"
+  | "REPLIED"
+  | "INTERESTED"
+  | "NOT_INTERESTED"
+  | "CALLBACK"
+  | "WON"
+  | "LOST"
+  | "NO_RESPONSE"
+  | "DISQUALIFIED"
+  | "DO_NOT_CONTACT";
+
+export interface NormalizedLead {
+  id: string; // Deterministic hash
+  companyName: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  websiteUrl: string;
+  city: string;
+  state: string;
+  country: string;
+  industry: string;
+  category: string;
+  status: LeadStatus;
+  score: number;
+  tier: LeadTier;
+  notes: string;
+  rawRecord: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  // Research & Qualification
+  bottleneck?: string;
+  strategicRationale?: string;
+  recommendedService?: string;
+  primaryService?: string;
+  recommendedChannel: "CALL" | "WHATSAPP" | "EMAIL" | "NONE";
+  verifiedClaims: string[];
+  // Outreach & Call State
+  outreachDrafts?: {
+    whatsapp?: string;
+    email?: { subject: string; body: string };
+    sms?: string;
+  };
+  callQueueItem?: CallQueueItem;
+  approvalToken?: string;
+  approvalStatus?: "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "EDITED";
+  nextAction?: {
+    type: string;
+    dueDate: string;
+    notes: string;
+  };
+}
+
+export interface CallQueueItem {
+  id: string;
+  leadId: string;
+  companyName: string;
+  contactPerson: string;
+  phone: string;
+  priority: "URGENT" | "HIGH" | "NORMAL";
+  reason: string;
+  talkingPoints: string[];
+  clickToCallUrl: string;
+  callStatus: "PENDING" | "COMPLETED" | "CALLBACK_REQUESTED" | "NO_ANSWER" | "NOT_INTERESTED";
+  outcomeNotes?: string;
+  calledAt?: string;
+  nextScheduledFollowUp?: string;
+}
+
+export interface DailySalesDashboardMetrics {
+  totalLeads: number;
+  newLeads: number;
+  qualifiedLeads: number; // Tier A + B
+  tierBreakdown: { A: number; B: number; C: number; D: number };
+  callsDue: number;
+  callsCompleted: number;
+  outreachDue: number;
+  followUpsDue: number;
+  replies: number;
+  interestedProspects: number;
+  meetingsOpportunities: number;
+  won: number;
+  lost: number;
+  pendingActions: number;
+}
+
+export interface DailySalesReport {
+  date: string;
+  metrics: DailySalesDashboardMetrics;
+  executiveSummary: string;
+  topOpportunities: NormalizedLead[];
+  urgentCalls: CallQueueItem[];
+  pendingApprovalsCount: number;
+  recommendedFocus: string[];
+}

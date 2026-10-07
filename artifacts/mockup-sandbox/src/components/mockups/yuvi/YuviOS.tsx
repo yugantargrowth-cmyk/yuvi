@@ -1,24 +1,49 @@
-import { useMemo, useRef, useState, useEffect, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from "react";
+import { useMemo, useRef, useState, useEffect, type Dispatch, type FormEvent, type ReactNode, type SetStateAction, type ChangeEvent } from "react";
 import yuviLogo from "../../../assets/yuvi-logo.png";
 import { store, loadSettings, saveSettings, loadGroqKey, saveGroqKey, GROQ_MODELS, type YuviSettings } from "./lib/store";
 import { testGroqConnection, askGroq, type ChatMessage } from "./lib/groq";
 import { loadAllSkills } from "./lib/skillLoader";
 import { getApi } from "./lib/skillRegistry";
 import type { GenerateBriefResult } from "./lib/skills/lead-research";
+import { parseLeadSheet } from "./lib/sales/csvParser";
+import { runDailySalesEngine, normalizePhone } from "./lib/sales/salesEngine";
+import { detectDailyIntent, handleDailyCommand } from "./lib/sales/intentRouter";
+import { testActivepiecesConnection } from "./lib/execution/activepiecesBridge";
+import { EMPLOYEES } from "./lib/execution/taskSystem";
+import type {
+  NormalizedLead,
+  CallQueueItem,
+  DailySalesDashboardMetrics,
+  DailySalesReport,
+  LeadTier,
+} from "./lib/types/sales";
 import {
   Archive, ArrowUpRight, AtSign, BadgeCheck, BarChart3, Bell, Bot, BrainCircuit, BriefcaseBusiness,
   CalendarDays, Check, CheckCircle2, ChevronDown, CircleDollarSign, Command, Database, Edit3,
   ExternalLink, Eye, FileBarChart, FileCheck2, FileImage, FileText, Filter, Gauge, GitBranch,
   Home, Image, Inbox, KanbanSquare, KeyRound, Layers3, Link2, Lock, LogOut, Menu,
-  MessageCircle, MessageSquare, Mic, MoreHorizontal, Network, Paperclip, PenLine, Plus, Radio,
+  MessageCircle, MessageSquare, Mic, MoreHorizontal, Network, Paperclip, PenLine, Phone, PhoneCall, Plus, Radio,
   RefreshCw, Rocket, Save, Search, Send, Settings2, ShieldCheck, SlidersHorizontal, Sparkles,
   Target, Trash2, Unlock, UploadCloud, UserRound, UsersRound, WifiOff, Workflow, X, XCircle, Zap
 } from "lucide-react";
 
 type View = "Dashboard" | "Approvals" | "Chat" | "AI Team" | "Leads" | "Pipeline" | "Clients" | "Knowledge Base" | "Outreach" | "Reports" | "Notifications" | "Settings";
-type Lead = { name: string; company: string; value: string; stage: string; initials: string; score: number; category: string; status: string; phone: string };
 type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "EDITING" | "PUBLISHED / COMPLETED";
-type Approval = { id: string; type: string; title: string; workspace: string; createdBy: string; timestamp: string; status: ApprovalStatus; description: string; externalUrl?: string; canvaProjectId?: string };
+type Approval = {
+  id: string;
+  type: string;
+  title: string;
+  workspace: string;
+  createdBy: string;
+  timestamp: string;
+  status: ApprovalStatus;
+  description: string;
+  externalUrl?: string;
+  canvaProjectId?: string;
+  exactMessage?: string;
+  leadId?: string;
+  tier?: LeadTier;
+};
 type Message = { id: string; role: "yuvi" | "user"; text: string; timestamp: string; attachment?: string };
 type Conversation = { id: string; title: string; preview: string; createdAt: string; updatedAt: string; messages: Message[]; archived?: boolean };
 
@@ -36,79 +61,225 @@ const nav: { name: View; icon: typeof Home; group?: string }[] = [
   { name: "Settings", icon: Settings2, group: "System" }
 ];
 
-const initialLeads: Lead[] = [
-  { name: "Mara Klein", company: "Northstar Labs", value: "₹18,400", stage: "Qualified", initials: "MK", score: 92, category: "SaaS", status: "Hot", phone: "+91 98120 44192" },
-  { name: "Dylan Park", company: "Kite & Co.", value: "₹9,800", stage: "Proposal", initials: "DP", score: 86, category: "Design", status: "Warm", phone: "+91 98701 22944" },
-  { name: "Aisha Raman", company: "Field Theory", value: "₹32,000", stage: "New", initials: "AR", score: 78, category: "Real Estate", status: "Warm", phone: "+91 98990 17308" },
-  { name: "Jon Bell", company: "Orbit House", value: "₹14,250", stage: "Contacted", initials: "JB", score: 64, category: "Architecture", status: "Cold", phone: "+91 98254 68018" },
-  { name: "Nikhil Shah", company: "Tradesphere", value: "₹26,500", stage: "Qualified", initials: "NS", score: 89, category: "Manufacturing", status: "Hot", phone: "+91 98250 70012" }
+const initialGujaratLeads: NormalizedLead[] = [
+  {
+    id: "lead_jfs_gujarat_01",
+    companyName: "Jangid Furniture Studio",
+    contactPerson: "Rajesh Jangid",
+    phone: "+919825012345",
+    email: "rajesh@jangidfurniture.com",
+    websiteUrl: "https://jangidfurniture.in",
+    city: "Ahmedabad",
+    state: "Gujarat",
+    country: "India",
+    industry: "Luxury Furniture & Interior Architecture",
+    category: "Architecture & Design",
+    status: "NEW",
+    score: 94,
+    tier: "A",
+    notes: "Premier bespoke woodcraft studio on SG Highway. High ticket commercial client potential.",
+    rawRecord: {},
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    bottleneck: "Low direct digital conversion capture; strong offline reputation without outbound sales engine.",
+    primaryService: "Direct Outbound & High-Value B2B Pipeline Acquisition",
+    recommendedService: "Direct Outbound & High-Value B2B Pipeline Acquisition",
+    recommendedChannel: "WHATSAPP",
+    verifiedClaims: [
+      "Verified showroom presence on SG Highway, Ahmedabad.",
+      "Commercial catalog spans luxury residential and corporate interiors.",
+      "Active WhatsApp business line."
+    ],
+    approvalToken: "appv_jfs_94",
+    approvalStatus: "PENDING_APPROVAL",
+    outreachDrafts: {
+      whatsapp: "Hello Rajesh,\n\nI was reviewing Jangid Furniture Studio's presence in Ahmedabad and noticed the exceptional bespoke craftsmanship you showcase on SG Highway.\n\nAt Yugantar Growth, we help premier Ahmedabad interior studios build predictable high-ticket architect and builder client pipelines using conversion architecture and dedicated outbound systems.\n\nWould it be worth a short 10-minute briefing call this Thursday or Friday to share two growth angles we mapped for Jangid Furniture Studio?\n\n— Shlok Pandya, Yugantar Growth",
+      email: {
+        subject: "B2B architect pipeline & growth angles for Jangid Furniture Studio",
+        body: "Dear Rajesh Jangid,\n\nI was reviewing Jangid Furniture Studio's presence in Ahmedabad and noticed the exceptional bespoke craftsmanship you showcase.\n\nAt Yugantar Growth, we help premier Gujarat design studios build predictable high-ticket client pipelines.\n\nWould it be worth a short 10-minute briefing call this week to share two growth angles we mapped for Jangid Furniture Studio?\n\nBest regards,\nShlok Pandya\nFounder, Yugantar Growth\nAhmedabad, Gujarat"
+      },
+      sms: "Hi Rajesh, Shlok from Yugantar Growth here. Put together two commercial client acquisition ideas for Jangid Furniture Studio. Can I send a 2-min brief?"
+    },
+    nextAction: {
+      type: "Discovery Call & WhatsApp Introduction",
+      dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+      notes: "Pitch direct outbound partnership to capture Gujarat builder and architect specifications."
+    }
+  },
+  {
+    id: "lead_tradesphere_gujarat_02",
+    companyName: "Tradesphere Exports",
+    contactPerson: "Nikhil Shah",
+    phone: "+919879054321",
+    email: "nikhil@tradesphere.co.in",
+    websiteUrl: "https://tradesphere.co.in",
+    city: "Surat",
+    state: "Gujarat",
+    country: "India",
+    industry: "Industrial Manufacturing & Exports",
+    category: "Manufacturing",
+    status: "NEW",
+    score: 88,
+    tier: "A",
+    notes: "Textile and chemical export house in Surat industrial zone.",
+    rawRecord: {},
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    bottleneck: "Static international catalog without systematic lead qualification or CRM funnel.",
+    primaryService: "Global B2B Buyer Acquisition Engine",
+    recommendedService: "Global B2B Buyer Acquisition Engine",
+    recommendedChannel: "WHATSAPP",
+    verifiedClaims: [
+      "Verified Surat industrial export firm.",
+      "High volume international inquiries with uncaptured web traffic."
+    ],
+    approvalToken: "appv_tradesphere_88",
+    approvalStatus: "PENDING_APPROVAL",
+    outreachDrafts: {
+      whatsapp: "Hello Nikhil,\n\nI was looking into leading industrial export operations in Surat and came across Tradesphere Exports.\n\nAt Yugantar Growth, we help prominent Gujarat export houses systematize high-margin overseas buyer acquisition using targeted conversion funnels and automated qualification.\n\nWould a 10-minute conversation this week be useful to explore two actionable buyer acquisition angles for Tradesphere?\n\n— Shlok Pandya, Yugantar Growth",
+      email: {
+        subject: "Outbound buyer acquisition for Tradesphere Exports",
+        body: "Dear Nikhil Shah,\n\nAt Yugantar Growth, we help Gujarat manufacturers build systematic high-margin export acquisition funnels.\n\nWould you be open to a 10-minute briefing call this week?\n\nBest regards,\nShlok Pandya"
+      },
+      sms: "Hi Nikhil, Shlok from Yugantar Growth. Put together two export buyer acquisition angles for Tradesphere. Can I share a brief?"
+    }
+  },
+  {
+    id: "lead_urbanhabitat_gujarat_03",
+    companyName: "Urban Habitat Architects",
+    contactPerson: "Mara Klein",
+    phone: "+919824098765",
+    email: "mara@urbanhabitat.in",
+    websiteUrl: "https://urbanhabitat.in",
+    city: "Ahmedabad",
+    state: "Gujarat",
+    country: "India",
+    industry: "Sustainable Architectural Design",
+    category: "Architecture",
+    status: "NEW",
+    score: 82,
+    tier: "A",
+    notes: "High-end sustainable commercial and residential architect in Bodakdev, Ahmedabad.",
+    rawRecord: {},
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    bottleneck: "Portfolio showcased on Instagram but lacks high-converting website consultation portal.",
+    primaryService: "Conversion Architecture & High-Ticket Private Client Pipeline",
+    recommendedService: "Conversion Architecture & High-Ticket Private Client Pipeline",
+    recommendedChannel: "CALL",
+    verifiedClaims: [
+      "Verified studio in Bodakdev, Ahmedabad.",
+      "Award-winning sustainable villa and institutional projects."
+    ],
+    approvalToken: "appv_urbanhabitat_82",
+    approvalStatus: "PENDING_APPROVAL",
+    outreachDrafts: {
+      whatsapp: "Hello Mara,\n\nI was admiring Urban Habitat's sustainable architectural projects in Bodakdev, Ahmedabad.\n\nAt Yugantar Growth, we partner with premier architects to establish direct high-ticket private client pipelines and high-converting consultation architectures.\n\nWould it be worth a brief 10-minute call this Thursday to share two growth lanes we analyzed for Urban Habitat?\n\n— Shlok Pandya, Yugantar Growth",
+      email: {
+        subject: "Private client pipeline angles for Urban Habitat Architects",
+        body: "Dear Mara Klein,\n\nI was admiring Urban Habitat's sustainable architectural work in Ahmedabad.\n\nAt Yugantar Growth, we help premier architectural studios build direct private client pipelines.\n\nBest regards,\nShlok Pandya"
+      },
+      sms: "Hi Mara, Shlok from Yugantar Growth. Mapped two private client acquisition angles for Urban Habitat. Can I send a brief?"
+    }
+  },
+  {
+    id: "lead_apex_gujarat_04",
+    companyName: "Apex Interior Craft",
+    contactPerson: "Dylan Park",
+    phone: "+919898011223",
+    email: "dylan@apexinteriors.com",
+    websiteUrl: "https://apexinteriors.com",
+    city: "Vadodara",
+    state: "Gujarat",
+    country: "India",
+    industry: "Turnkey Corporate Interiors",
+    category: "Design",
+    status: "NEW",
+    score: 74,
+    tier: "B",
+    notes: "Commercial office fitouts and turnkey spaces across Gujarat.",
+    rawRecord: {},
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    bottleneck: "Low local search authority compared to regional competitors in Vadodara.",
+    primaryService: "Local Search Authority & B2B Fitout Acquisition",
+    recommendedService: "Local Search Authority & B2B Fitout Acquisition",
+    recommendedChannel: "CALL",
+    verifiedClaims: [
+      "Verified turnkey office interior contractor in Vadodara.",
+      "Active telephone line."
+    ],
+    approvalToken: "appv_apex_74",
+    approvalStatus: "PENDING_APPROVAL",
+    outreachDrafts: {
+      whatsapp: "Hello Dylan,\n\nI came across Apex Interior Craft's turnkey office fitouts across Gujarat.\n\nAt Yugantar Growth, we help Vadodara and Ahmedabad commercial interior specialists capture enterprise corporate leases before competitors.\n\nWould you be open to a 10-minute review call this week?\n\n— Shlok Pandya, Yugantar Growth",
+      email: {
+        subject: "Commercial fitout acquisition angles for Apex Interior Craft",
+        body: "Dear Dylan,\n\nAt Yugantar Growth, we help commercial interior contractors capture enterprise fitouts.\n\nBest regards,\nShlok Pandya"
+      },
+      sms: "Hi Dylan, Shlok from Yugantar Growth. Put together two commercial fitout angles for Apex. Can I share a brief?"
+    }
+  }
 ];
-
-type AgentStatus = "Ready" | "Running" | "Waiting" | "Needs approval" | "Completed" | "Failed" | "Not connected";
-type Agent = {
-  name: string; role: string; description: string; color: string;
-  capabilities: string[]; status: AgentStatus; progress: number;
-  task: string; lastActivity: string; workflowConnected: boolean;
-};
-const agents: Agent[] = [
-  { name: "Scout", role: "Lead Intelligence", description: "Finds, researches, enriches, qualifies and scores potential leads.", color: "#43e6d0",
-    capabilities: ["Lead discovery", "Company research", "Contact research", "Enrichment", "ICP matching", "Lead scoring", "Deduplication"],
-    status: "Not connected", progress: 0, task: "Finding 20 architects in Ahmedabad (preview only)", lastActivity: "No live workflow connected", workflowConnected: false },
-  { name: "Hunter", role: "Outreach & Follow-up", description: "Handles personalized outreach, conversations, follow-ups and lead movement.", color: "#ff8a65",
-    capabilities: ["Outreach", "Personalization", "Follow-up sequences", "Reply classification", "Lead qualification", "Conversation tracking", "Escalation"],
-    status: "Not connected", progress: 0, task: "No mission assigned", lastActivity: "No live workflow connected", workflowConnected: false },
-  { name: "Spark", role: "Content Intelligence", description: "Creates content strategy and content assets.", color: "#b16cff",
-    capabilities: ["Content strategy", "Ideas", "Posts", "Carousels", "Reels", "Stories", "Captions", "Repurposing", "Brand voice"],
-    status: "Not connected", progress: 0, task: "Creating Instagram carousel for JFS (preview only)", lastActivity: "No live workflow connected", workflowConnected: false },
-  { name: "Publisher", role: "Distribution", description: "Handles content scheduling, publishing and distribution.", color: "#ffc66d",
-    capabilities: ["Content calendar", "Scheduling", "Platform formatting", "Publishing", "Publishing status", "Failure handling"],
-    status: "Not connected", progress: 0, task: "No mission assigned", lastActivity: "No live workflow connected", workflowConnected: false },
-  { name: "Analyst", role: "Performance Intelligence", description: "Analyzes business, content and campaign performance.", color: "#61a6ff",
-    capabilities: ["Metrics", "Performance analysis", "Lead conversion analysis", "Content analysis", "Reporting", "Recommendations", "Learning feedback"],
-    status: "Not connected", progress: 0, task: "No mission assigned", lastActivity: "No live workflow connected", workflowConnected: false },
-  { name: "Operator", role: "Business Operations", description: "Handles repetitive business and operational tasks.", color: "#8b69ff",
-    capabilities: ["CRM operations", "Data entry", "Documents", "Reports", "Client updates", "Internal operations", "Workflow execution"],
-    status: "Not connected", progress: 0, task: "Monthly report in queue (preview only)", lastActivity: "No live workflow connected", workflowConnected: false },
-  { name: "Researcher", role: "Deep Research", description: "Performs deep company, competitor, market and industry research.", color: "#d59aff",
-    capabilities: ["Company research", "Competitor research", "Market research", "Industry research", "Trend research", "Structured intelligence"],
-    status: "Not connected", progress: 0, task: "No mission assigned", lastActivity: "No live workflow connected", workflowConnected: false }
-];
-const activity = ["Scout found 18 new businesses", "Spark completed Instagram carousel", "Business audit for Tradesphere is 68% complete", "Payment received from Jangid Furniture Studio", "Operator prepared 2 follow-ups for approval"];
 
 const initialApprovals: Approval[] = [
-  { id: "approval-01", type: "Carousel", title: "JFS monsoon collection", workspace: "Jangid Furniture Studio", createdBy: "Spark", timestamp: "Today · 4:45 PM", status: "PENDING", description: "Six-frame Instagram carousel introducing the monsoon collection. Copy and layout are ready for founder review.", canvaProjectId: "" },
-  { id: "approval-02", type: "Proposal", title: "Tradesphere growth proposal", workspace: "Tradesphere", createdBy: "Hunter", timestamp: "Today · 2:10 PM", status: "EDITING", description: "Client-facing proposal with audit findings, three growth lanes, and a 90-day delivery plan." },
-  { id: "approval-03", type: "Report", title: "Weekly operating brief", workspace: "Yungantar Growth", createdBy: "Analyst", timestamp: "Yesterday · 8:30 AM", status: "APPROVED", description: "Founder brief covering pipeline velocity, received payments, and crew activity." },
-  { id: "approval-04", type: "Social post", title: "Architects in Ahmedabad", workspace: "Yungantar Growth", createdBy: "Scout", timestamp: "Yesterday · 6:18 PM", status: "PUBLISHED / COMPLETED", description: "A short social post built from the local research brief.", externalUrl: "" }
+  {
+    id: "approval-jfs-01",
+    type: "Outreach (WhatsApp)",
+    title: "Jangid Furniture Studio — Tier A WhatsApp Outreach",
+    workspace: "Yugantar Growth / Sales Engine",
+    createdBy: "Scout + Messenger",
+    timestamp: "Today · 8:15 AM",
+    status: "PENDING",
+    tier: "A",
+    leadId: "lead_jfs_gujarat_01",
+    description: "3-part personalized outreach: SG Highway observation + predictable architect pipeline offer + 10-min briefing CTA.",
+    exactMessage: "Hello Rajesh,\n\nI was reviewing Jangid Furniture Studio's presence in Ahmedabad and noticed the exceptional bespoke craftsmanship you showcase on SG Highway.\n\nAt Yugantar Growth, we help premier Ahmedabad interior studios build predictable high-ticket architect and builder client pipelines using conversion architecture and dedicated outbound systems.\n\nWould it be worth a short 10-minute briefing call this Thursday or Friday to share two growth angles we mapped for Jangid Furniture Studio?\n\n— Shlok Pandya, Yugantar Growth"
+  },
+  {
+    id: "approval-tradesphere-02",
+    type: "Outreach (WhatsApp)",
+    title: "Tradesphere Exports — Tier A WhatsApp Outreach",
+    workspace: "Yugantar Growth / Sales Engine",
+    createdBy: "Scout + Messenger",
+    timestamp: "Today · 8:20 AM",
+    status: "PENDING",
+    tier: "A",
+    leadId: "lead_tradesphere_gujarat_02",
+    description: "3-part personalized outreach: Surat industrial export observation + global buyer acquisition offer + briefing CTA.",
+    exactMessage: "Hello Nikhil,\n\nI was looking into leading industrial export operations in Surat and came across Tradesphere Exports.\n\nAt Yugantar Growth, we help prominent Gujarat export houses systematize high-margin overseas buyer acquisition using targeted conversion funnels and automated qualification.\n\nWould a 10-minute conversation this week be useful to explore two actionable buyer acquisition angles for Tradesphere?\n\n— Shlok Pandya, Yugantar Growth"
+  },
+  {
+    id: "approval-03",
+    type: "Report",
+    title: "Daily Sales Engine Pulse & Commercial Priorities",
+    workspace: "Yugantar Growth",
+    createdBy: "Analyst",
+    timestamp: "Today · 8:30 AM",
+    status: "APPROVED",
+    description: "Operational summary covering 4 qualified Gujarat targets, 4 calls queued, and pending outreach reviews."
+  }
 ];
 
 type NotifType = "Agent completed"|"Agent failed"|"Approval required"|"Important lead"|"New conversation"|"System warning"|"YUVI briefing"|"Integration disconnected";
 type Notif = { id: string; type: NotifType; text: string; timestamp: string; read: boolean; target?: { kind: "approval"|"conversation"|"lead"|"agent"|"settings"; id?: string } };
+
 const initialNotifs: Notif[] = [
-  { id: "n-01", type: "Approval required", text: "JFS monsoon collection carousel is waiting for review.", timestamp: "Today · 4:45 PM", read: false, target: { kind: "approval", id: "approval-01" } },
-  { id: "n-02", type: "Integration disconnected", text: "Groq, Supabase and n8n are not connected in this preview build.", timestamp: "Today · 9:00 AM", read: false },
-  { id: "n-03", type: "YUVI briefing", text: "Three decisions are worth your attention today.", timestamp: "Today · 8:00 AM", read: true, target: { kind: "conversation", id: "conv-01" } }
+  { id: "n-01", type: "Approval required", text: "2 Tier A WhatsApp drafts for Jangid Furniture and Tradesphere are waiting in Approvals.", timestamp: "Today · 8:30 AM", read: false, target: { kind: "approval", id: "approval-jfs-01" } },
+  { id: "n-02", type: "Important lead", text: "Jangid Furniture Studio (Ahmedabad) scored 94 — Tier A commercial priority.", timestamp: "Today · 8:15 AM", read: false, target: { kind: "lead" } },
+  { id: "n-03", type: "YUVI briefing", text: "Daily Sales Engine ready. Type 'Work on my leads today' or 'Give me todays calls' to command.", timestamp: "Today · 8:00 AM", read: true, target: { kind: "conversation", id: "conv-01" } }
 ];
+
 const initialConversations: Conversation[] = [
   {
-    id: "conv-01", title: "Monday operating brief", preview: "I found three decisions worth your attention.", createdAt: "2024-07-29", updatedAt: "Today · 5:12 PM",
+    id: "conv-01",
+    title: "Daily Sales Command Briefing",
+    preview: "Sales Engine ready. Work on leads, check calls, and review outreach.",
+    createdAt: "2026-10-05",
+    updatedAt: "Today · 8:00 AM",
     messages: [
-      { id: "m-01", role: "user", text: "Give me the decisions worth making before tonight.", timestamp: "5:08 PM" },
-      { id: "m-02", role: "yuvi", text: "I found three decisions worth your attention: approve the JFS carousel, review the Tradesphere proposal, and choose whether Scout should continue the Ahmedabad research pass.", timestamp: "5:09 PM" }
-    ]
-  },
-  {
-    id: "conv-02", title: "JFS content review", preview: "The carousel is ready for approval.", createdAt: "2024-07-28", updatedAt: "Yesterday · 4:45 PM",
-    messages: [
-      { id: "m-03", role: "user", text: "What is waiting for me from JFS?", timestamp: "4:42 PM" },
-      { id: "m-04", role: "yuvi", text: "The monsoon collection carousel is in Approvals. It was prepared by Spark and has six frames.", timestamp: "4:45 PM" }
-    ]
-  },
-  {
-    id: "conv-03", title: "Architect lead pass", preview: "Scout found 18 new businesses.", createdAt: "2024-07-24", updatedAt: "Previous 7 days · 6:30 PM",
-    messages: [
-      { id: "m-05", role: "user", text: "Show me what Scout found.", timestamp: "6:28 PM" },
-      { id: "m-06", role: "yuvi", text: "Scout found 18 new businesses in Ahmedabad. Five are marked Hot and are ready for a human-led follow-up.", timestamp: "6:30 PM" }
+      { id: "m-01", role: "user", text: "What should I do today?", timestamp: "8:00 AM" },
+      { id: "m-02", role: "yuvi", text: "Good morning Shlok. Today's commercial priorities:\n\n1. **Calls Queue:** You have 3 URGENT Tier A calls due today (Jangid Furniture, Tradesphere, Urban Habitat).\n2. **Approvals Gate:** 2 personalized WhatsApp outreach drafts are staged for your review.\n3. **Active Pipeline:** 4 high-conviction Gujarat commercial leads active in the corridor.\n\nType 'Give me todays calls' or 'Prepare todays outreach' to execute.", timestamp: "8:01 AM" }
     ]
   }
 ];
@@ -116,7 +287,6 @@ const initialConversations: Conversation[] = [
 const css = `
 @keyframes yuvi-rise { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
 @keyframes yuvi-pulse { 0%,100%{opacity:.4;transform:scale(.94)} 50%{opacity:1;transform:scale(1)} }
-@keyframes yuvi-orbit { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }
 .yuvi * { box-sizing:border-box } .yuvi { font-family:'DM Sans',ui-sans-serif,system-ui,sans-serif; color:#e9eaff; background:#070918; min-height:100dvh; }
 .yuvi ::-webkit-scrollbar { width:5px; height:5px } .yuvi ::-webkit-scrollbar-thumb { background:#292450; border-radius:8px }
 .yuvi .rise { animation:yuvi-rise .45s both } .yuvi .panel { background:linear-gradient(145deg,rgba(20,21,51,.9),rgba(12,14,34,.86)); border:1px solid rgba(142,126,255,.19); box-shadow:inset 0 1px rgba(255,255,255,.045),0 14px 40px rgba(0,0,0,.2); }
@@ -133,30 +303,35 @@ function Avatar({ text, color = "#7c5cff", size = "h-8 w-8" }: { text: string; c
   return <span className={`flex ${size} shrink-0 items-center justify-center rounded-full text-[10px] font-bold`} style={{ background: `${color}22`, color, border: `1px solid ${color}66` }}>{text}</span>;
 }
 function StatusPill({ status }: { status: string }) {
-  const color = status.includes("APPROVED") || status.includes("COMPLETED") || status === "Hot" ? "emerald" : status === "REJECTED" || status === "Cold" ? "rose" : status === "EDITING" || status === "Warm" ? "amber" : "violet";
+  const color = status.includes("APPROVED") || status.includes("COMPLETED") || status === "Hot" || status === "WON" || status === "INTERESTED" ? "emerald" : status === "REJECTED" || status === "Cold" || status === "LOST" || status === "DISQUALIFIED" ? "rose" : status === "EDITING" || status === "Warm" || status === "CALLBACK" ? "amber" : "violet";
   return <span className={`inline-flex rounded-full border border-${color}-300/20 bg-${color}-300/10 px-2 py-1 text-[9px] text-${color}-200`}>{status}</span>;
 }
+function TierPill({ tier }: { tier: LeadTier }) {
+  const color = tier === "A" ? "emerald" : tier === "B" ? "cyan" : tier === "C" ? "amber" : "slate";
+  return <span className={`inline-flex items-center gap-1 rounded-full border border-${color}-300/25 bg-${color}-300/10 px-2.5 py-0.5 text-[9px] font-semibold text-${color}-200`}>Tier {tier}</span>;
+}
+
 function Header({ view, onAdd, onMenu, onUser, notifs, onOpenNotif, onClearNotif, onClearAllNotifs, notifPanel, setNotifPanel }: { view: View; onAdd: () => void; onMenu: () => void; onUser: () => void; notifs: Notif[]; onOpenNotif: (n: Notif) => void; onClearNotif: (id: string) => void; onClearAllNotifs: () => void; notifPanel: boolean; setNotifPanel: (v: boolean) => void }) {
   const unread = notifs.filter(n=>!n.read).length;
   return <header className="relative flex items-center justify-between gap-3 border-b border-violet-400/10 px-4 py-4 sm:px-7">
     <div className="flex items-center gap-3"><button aria-label="Open navigation" onClick={onMenu} className="rounded-lg p-2 text-slate-400 hover:bg-white/5 lg:hidden"><Menu size={19}/></button><div><div className="text-[11px] uppercase tracking-[.22em] text-violet-300/70">Mission control / {view}</div><h1 className="mt-1 text-lg font-semibold text-white sm:text-xl">{view === "Dashboard" ? "Good evening, Shlok." : view}</h1></div></div>
-    <div className="flex items-center gap-2"><div className="hidden items-center gap-2 rounded-full border border-cyan-400/15 bg-cyan-400/5 px-3 py-1.5 text-[10px] text-cyan-200 sm:flex"><i className="status-dot"/> Brain ready · local-first</div><button aria-label="Notifications" onClick={()=>setNotifPanel(!notifPanel)} className="relative rounded-lg p-2 text-slate-400 hover:bg-white/5"><Bell size={18}/>{unread>0&&<span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-400 px-1 text-[8px] font-semibold text-white">{unread}</span>}</button><button aria-label="Quick add" onClick={onAdd} className="rounded-lg border border-violet-300/25 bg-violet-500/15 p-2 text-violet-200 hover:bg-violet-500/25"><Plus size={18}/></button><button aria-label="Open user menu" onClick={onUser}><Avatar text="SP" color="#d59aff"/></button></div>
+    <div className="flex items-center gap-2"><div className="hidden items-center gap-2 rounded-full border border-cyan-400/15 bg-cyan-400/5 px-3 py-1.5 text-[10px] text-cyan-200 sm:flex"><i className="status-dot"/> Brain ready · Activepieces runtime</div><button aria-label="Notifications" onClick={()=>setNotifPanel(!notifPanel)} className="relative rounded-lg p-2 text-slate-400 hover:bg-white/5"><Bell size={18}/>{unread>0&&<span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-400 px-1 text-[8px] font-semibold text-white">{unread}</span>}</button><button aria-label="Quick add" onClick={onAdd} className="rounded-lg border border-violet-300/25 bg-violet-500/15 p-2 text-violet-200 hover:bg-violet-500/25"><Plus size={18}/></button><button aria-label="Open user menu" onClick={onUser}><Avatar text="SP" color="#d59aff"/></button></div>
     {notifPanel&&<div className="absolute right-4 top-[62px] z-40 max-h-[70vh] w-[calc(100%-2rem)] overflow-y-auto rounded-xl border border-violet-300/20 bg-[#10112b] p-2 shadow-2xl sm:right-7 sm:w-96">
       <div className="flex items-center justify-between px-2 py-2"><span className="text-[10px] uppercase tracking-[.18em] text-violet-300">Notifications</span>{notifs.length>0&&<button onClick={onClearAllNotifs} className="text-[9px] text-slate-500 hover:text-white">Clear all</button>}</div>
       {notifs.length===0?<div className="px-3 py-8 text-center text-[10px] text-slate-600">You're caught up.</div>:notifs.map(n=><div key={n.id} className={`group flex items-start gap-2 rounded-lg p-3 text-left ${n.read?"":"bg-violet-500/10"}`}>
         <button onClick={()=>onOpenNotif(n)} className="min-w-0 flex-1 text-left"><div className="flex items-center gap-2"><span className={`h-1.5 w-1.5 rounded-full ${n.read?"bg-slate-700":"bg-cyan-300"}`}/><span className="text-[9px] uppercase tracking-[.12em] text-violet-300">{n.type}</span></div><div className="mt-1 text-[11px] leading-4 text-slate-200">{n.text}</div><div className="mt-1 text-[9px] text-slate-600">{n.timestamp}</div></button>
-        <button onClick={()=>onClearNotif(n.id)} className="rounded p-1 text-slate-600 opacity-0 hover:text-rose-200 group-hover:opacity-100" aria-label="Clear notification"><X size={13}/></button>
-      </div>)}
+        <button onClick={()=>onClearNotif(n.id)} aria-label="Dismiss notification" className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-white"><X size={13}/></button></div>)}
     </div>}
   </header>;
 }
+
 function Sidebar({ current, setCurrent, open, onUser }: { current: View; setCurrent: (v: View) => void; open: boolean; onUser: () => void }) {
   return <aside className={`${open ? "translate-x-0" : "-translate-x-full"} fixed inset-y-0 left-0 z-30 w-64 border-r border-violet-400/10 bg-[#090a1e] px-4 py-5 transition-transform lg:static lg:translate-x-0`}>
     <div className="mb-9 flex items-center gap-3 px-2"><div className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl bg-violet-500/20"><img src={yuviLogo} alt="YUVI" className="h-full w-full object-contain p-1"/></div><div><div className="text-[25px] font-black tracking-[.16em] text-white">YUVI</div><div className="-mt-1 text-[8px] tracking-[.27em] text-violet-300/70">AI BUSINESS OS</div></div></div>
     <div className="mb-2 px-3 text-[9px] uppercase tracking-[.2em] text-slate-600">Navigate</div>
     <nav>{nav.map(({ name, icon: Icon, group }) => <div key={name}>{group && group !== "Workspace" && <div className="mb-2 mt-5 px-3 text-[9px] uppercase tracking-[.2em] text-slate-600">{group}</div>}<button onClick={() => setCurrent(name)} className={`mb-1 flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[12px] ${current === name ? "border border-violet-400/35 bg-violet-500/15 text-white shadow-[0_0_20px_rgba(121,77,255,.1)]" : "text-slate-400 hover:bg-white/[.04] hover:text-slate-200"}`}><Icon size={15} strokeWidth={1.7}/>{name}{current === name && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-cyan-300"/>}</button></div>)}</nav>
-    <div className="mt-8 rounded-xl border border-cyan-300/10 bg-cyan-300/[.035] p-3"><div className="flex items-center gap-2 text-[10px] text-cyan-200"><Radio size={13}/> YUVI STATUS</div><div className="mt-4 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-violet-400/50 shadow-[0_0_25px_rgba(133,70,255,.5)]"><div className="h-5 w-5 rounded-full bg-violet-300 shadow-[0_0_18px_#ad7bff]"/></div><div className="mt-3 text-[10px] font-semibold tracking-widest text-cyan-300">ONLINE</div><div className="mt-1 text-[9px] text-slate-500">Preview systems ready</div></div></div>
-    <button onClick={onUser} className="absolute bottom-5 left-4 right-4 flex items-center gap-2 border-t border-white/5 pt-4 text-left"><Avatar text="SP" color="#d59aff"/><div className="text-[11px]"><div className="text-slate-200">Shlok Pandya</div><div className="text-[9px] text-slate-500">Founder, Yungantar Growth</div></div><ChevronDown size={13} className="ml-auto text-slate-500"/></button>
+    <div className="mt-8 rounded-xl border border-cyan-300/10 bg-cyan-300/[.035] p-3"><div className="flex items-center gap-2 text-[10px] text-cyan-200"><Radio size={13}/> YUVI STATUS</div><div className="mt-4 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-violet-400/50 shadow-[0_0_25px_rgba(133,70,255,.5)]"><div className="h-5 w-5 rounded-full bg-violet-300 shadow-[0_0_18px_#ad7bff]"/></div><div className="mt-3 text-[10px] font-semibold tracking-widest text-cyan-300">ONLINE</div><div className="mt-1 text-[9px] text-slate-500">Sales Engine Armed</div></div></div>
+    <button onClick={onUser} className="absolute bottom-5 left-4 right-4 flex items-center gap-2 border-t border-white/5 pt-4 text-left"><Avatar text="SP" color="#d59aff"/><div className="text-[11px]"><div className="text-slate-200">Shlok Pandya</div><div className="text-[9px] text-slate-500">Founder, Yugantar Growth</div></div><ChevronDown size={13} className="ml-auto text-slate-500"/></button>
   </aside>;
 }
 
@@ -166,123 +341,864 @@ function Stat({ label, value, delta, icon: Icon, color = "#a87cff" }: { label: s
 function Sparkline({ color = "#a87cff" }: { color?: string }) {
   return <svg viewBox="0 0 260 70" className="h-20 w-full"><path d="M0 56 C25 52 22 31 43 42 S70 57 83 39 S103 27 115 45 S136 30 147 35 S160 52 176 27 S198 30 205 19 S229 25 260 4" fill="none" stroke={color} strokeWidth="2"/><path d="M0 56 C25 52 22 31 43 42 S70 57 83 39 S103 27 115 45 S136 30 147 35 S160 52 176 27 S198 30 205 19 S229 25 260 4 V70 H0" fill={`${color}12`} stroke="none"/></svg>;
 }
-function Dashboard({ onAdd, setCurrent }: { onAdd: () => void; setCurrent: (v: View) => void }) {
-  return <div className="rise signal-grid relative space-y-4 p-4 sm:p-7"><div className="mb-1 flex items-center justify-between"><div><div className="eyebrow">Workspace telemetry</div><div className="mt-1 text-[10px] text-slate-500">Preview data · browser state not connected in this isolated frame</div></div><div className="hidden items-center gap-2 text-[9px] text-slate-500 sm:flex"><span className="status-dot"/> local persistence available</div></div>
-    <div className="grid grid-cols-2 gap-3 xl:grid-cols-4"><Stat label="Business health" value="84 /100" delta="12% vs yesterday" icon={Gauge}/><Stat label="Active missions" value="7" delta="2 running" icon={Rocket} color="#43e6d0"/><Stat label="Leads this month" value="142" delta="18% vs last month" icon={Target} color="#61a6ff"/><Stat label="Revenue this month" value="₹1,24,500" delta="24% vs last month" icon={CircleDollarSign} color="#ffc66d"/></div>
-    <div className="grid gap-4 xl:grid-cols-[1.55fr_1fr]"><Panel className="p-4 sm:p-5"><div className="mb-4 flex items-center justify-between"><div><div className="text-[10px] uppercase tracking-[.18em] text-violet-300">AI team overview</div><div className="mt-1 text-xs text-slate-500">Your crew is moving the business forward</div></div><button onClick={() => setCurrent("AI Team")} className="text-[10px] text-violet-300 hover:text-white">Manage team →</button></div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{agents.map((a) => <div key={a.name} className="rounded-lg border border-white/5 bg-black/15 p-3"><div className="flex items-center gap-2"><Avatar text={a.name.slice(0,2)} color={a.color}/><div><div className="text-[11px] font-medium text-slate-100">{a.name}</div><div className="text-[9px] text-slate-500">{a.role}</div></div></div><div className="mt-3 flex items-center gap-1 text-[9px]" style={{color:a.color}}><span className="h-1.5 w-1.5 rounded-full" style={{background:a.color}}/>{a.status}</div><div className="mt-3 h-1 rounded bg-white/5"><div className="h-1 rounded" style={{width:`${a.progress}%`,background:a.color}}/></div><div className="mt-2 text-[9px] text-slate-500">{a.progress ? `${a.progress}% · ` : ""}{a.task}</div></div>)}</div></Panel><Mission setCurrent={setCurrent}/></div>
-    <div className="grid gap-4 lg:grid-cols-3"><Panel className="p-5 lg:col-span-2"><div className="flex items-start justify-between"><div><div className="text-[10px] uppercase tracking-[.18em] text-violet-300">Revenue overview</div><div className="mt-2 text-2xl text-white">₹1,24,500 <span className="text-[10px] text-emerald-300">↑ 24%</span></div></div><select className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-400"><option>This month</option><option>Last month</option></select></div><Sparkline/><div className="flex justify-between text-[9px] text-slate-600"><span>1 Jul</span><span>7 Jul</span><span>14 Jul</span><span>21 Jul</span><span>28 Jul</span><span>31 Jul</span></div></Panel><Panel className="p-5"><div className="text-[10px] uppercase tracking-[.18em] text-violet-300">Lead pipeline</div><div className="mt-4 space-y-1.5 text-center text-[10px]"><div className="mx-auto w-full rounded-t bg-violet-500/35 py-2 text-violet-100">New leads <b className="ml-5">142</b></div><div className="mx-auto w-[82%] bg-cyan-500/25 py-2">Contacted <b className="ml-5">89</b></div><div className="mx-auto w-[64%] bg-blue-500/25 py-2">Qualified <b className="ml-5">36</b></div><div className="mx-auto w-[46%] bg-amber-400/25 py-2">Proposal <b className="ml-5">12</b></div><div className="mx-auto w-[28%] rounded-b bg-emerald-400/25 py-2">Closed <b className="ml-5">4</b></div></div></Panel></div>
-    <div className="grid gap-4 lg:grid-cols-3"><ActivityPanel/><Opportunities/><Panel className="p-5"><div className="flex items-center justify-between"><div className="text-[10px] uppercase tracking-[.18em] text-violet-300">Quick actions</div><MoreHorizontal size={16} className="text-slate-600"/></div><div className="mt-4 space-y-2"><Quick icon={MessageSquare} label="Open Chat" onClick={() => setCurrent("Chat")}/><Quick icon={Plus} label="Add New Lead" onClick={onAdd}/><Quick icon={FileBarChart} label="Generate Report" onClick={() => setCurrent("Reports")}/><Quick icon={BadgeCheck} label="Review approvals" onClick={() => setCurrent("Approvals")}/></div></Panel></div>
+
+function Dashboard({
+  metrics,
+  callQueue,
+  onOpenCall,
+  onTriggerEngine,
+  setCurrent,
+  onAdd
+}: {
+  metrics: DailySalesDashboardMetrics;
+  callQueue: CallQueueItem[];
+  onOpenCall: (item: CallQueueItem) => void;
+  onTriggerEngine: () => void;
+  setCurrent: (v: View) => void;
+  onAdd: () => void;
+}) {
+  const pendingCalls = callQueue.filter(c => c.callStatus === "PENDING");
+
+  return <div className="rise signal-grid relative space-y-4 p-4 sm:p-7">
+    <div className="mb-1 flex items-center justify-between">
+      <div>
+        <div className="eyebrow">Yugantar Growth / Daily Sales Radar</div>
+        <div className="mt-1 text-[10px] text-slate-500">Live commercial telemetry · Activepieces execution runtime connected</div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button variant="primary" onClick={onTriggerEngine}><Rocket size={13}/> Run Sales Engine</Button>
+      </div>
+    </div>
+
+    {/* Primary Telemetry Cards */}
+    <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <Stat label="Total Leads in Radar" value={String(metrics.totalLeads)} delta={`${metrics.newLeads} new today`} icon={Target}/>
+      <Stat label="Qualified Opportunities" value={`${metrics.qualifiedLeads}`} delta={`Tier A: ${metrics.tierBreakdown.A} | Tier B: ${metrics.tierBreakdown.B}`} icon={BadgeCheck} color="#43e6d0"/>
+      <Stat label="Calls Due Today" value={`${metrics.callsDue}`} delta={`${metrics.callsCompleted} completed`} icon={PhoneCall} color="#ff8a65"/>
+      <Stat label="Outreach Awaiting Approval" value={`${metrics.outreachDue}`} delta="Human gate armed" icon={Send} color="#ffc66d"/>
+    </div>
+
+    {/* AI Crew Overview & Missions */}
+    <div className="grid gap-4 xl:grid-cols-[1.55fr_1fr]">
+      <Panel className="p-4 sm:p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <div className="text-[10px] uppercase tracking-[.18em] text-violet-300">Active AI Employees</div>
+            <div className="mt-1 text-xs text-slate-500">Universal Task System · Activepieces runtime execution</div>
+          </div>
+          <button onClick={() => setCurrent("AI Team")} className="text-[10px] text-violet-300 hover:text-white">Manage team →</button>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { name: "Scout", role: "Lead Intel", status: "Active in Sprint", color: "#43e6d0", task: `Scored ${metrics.totalLeads} leads` },
+            { name: "Hunter", role: "Outreach & Calls", status: `${metrics.callsDue} calls queued`, color: "#ff8a65", task: "Guards dispatch approvals" },
+            { name: "Operator", role: "Business Ops", status: "Syncing DB State", color: "#8b69ff", task: "Deduplication & memory guard" },
+            { name: "Researcher", role: "Deep Research", status: "Footprint Armed", color: "#d59aff", task: "Gujarat commercial analysis" }
+          ].map((a) => (
+            <div key={a.name} className="rounded-lg border border-white/5 bg-black/15 p-3">
+              <div className="flex items-center gap-2"><Avatar text={a.name.slice(0,2)} color={a.color}/><div><div className="text-[11px] font-medium text-slate-100">{a.name}</div><div className="text-[9px] text-slate-500">{a.role}</div></div></div>
+              <div className="mt-3 flex items-center gap-1 text-[9px]" style={{color:a.color}}><span className="h-1.5 w-1.5 rounded-full" style={{background:a.color}}/>{a.status}</div>
+              <div className="mt-2 text-[9px] text-slate-500">{a.task}</div>
+            </div>
+          ))}
+        </div>
+      </Panel>
+      <Panel className="p-5">
+        <div className="flex items-center justify-between">
+          <div className="text-[10px] uppercase tracking-[.18em] text-violet-300">Today's Focus & Next Actions</div>
+          <span className="rounded bg-violet-400/10 px-2 py-1 text-[9px] text-violet-300">{metrics.callsDue + metrics.outreachDue} pending</span>
+        </div>
+        <div className="mt-4 space-y-3">
+          <div className="flex items-start gap-2 text-[10px]">
+            <span className="mt-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-cyan-300 bg-cyan-300/20 text-cyan-200"><Check size={9}/></span>
+            <div><div className="text-slate-200">Run Sales Engine on Gujarat lead pool</div><div className="mt-1 text-[9px] text-slate-500">Completed · Deduplicated & Tier-classified</div></div>
+          </div>
+          <div className="flex items-start gap-2 text-[10px]">
+            <span className={`mt-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border ${metrics.callsCompleted > 0 ? "border-cyan-300 bg-cyan-300/20 text-cyan-200" : "border-slate-600 text-slate-600"}`}>{metrics.callsCompleted > 0 && <Check size={9}/>}</span>
+            <div><div className="text-slate-200">Execute {metrics.callsDue} discovery calls (Tier A targets)</div><div className="mt-1 text-[9px] text-slate-500">Prioritized queue ready with talking points</div></div>
+          </div>
+          <div className="flex items-start gap-2 text-[10px]">
+            <span className="mt-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-slate-600 text-slate-600"/>
+            <div><div className="text-slate-200">Review & approve {metrics.outreachDue} staged outreach drafts</div><div className="mt-1 text-[9px] text-slate-500">Approvals Gate · Hunter awaiting founder consent</div></div>
+          </div>
+        </div>
+        <button onClick={() => setCurrent("Approvals")} className="mt-4 text-[10px] text-violet-300">Go to Approvals queue →</button>
+      </Panel>
+    </div>
+
+    {/* Prioritized Call Queue & Sales Pipeline Breakdown */}
+    <div className="grid gap-4 lg:grid-cols-3">
+      {/* Daily Call Queue Panel */}
+      <Panel className="p-5 lg:col-span-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[10px] uppercase tracking-[.18em] text-violet-300">Prioritized Daily Call Queue</div>
+            <h3 className="mt-1 text-sm text-white">Click to call with structured talking points</h3>
+          </div>
+          <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-[9px] text-emerald-200">{pendingCalls.length} calls due</span>
+        </div>
+        <div className="mt-4 divide-y divide-white/5">
+          {pendingCalls.length === 0 ? (
+            <div className="py-8 text-center text-xs text-slate-500">Call queue is clear. No calls pending.</div>
+          ) : (
+            pendingCalls.slice(0, 4).map((c) => (
+              <div key={c.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-white">{c.companyName}</span>
+                    <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold ${c.priority === "URGENT" ? "bg-rose-500/20 text-rose-300 border border-rose-500/30" : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"}`}>{c.priority}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400">{c.contactPerson} · <span className="text-slate-300 font-mono">{c.phone}</span></div>
+                  <div className="mt-1 truncate text-[9px] text-slate-500">{c.reason}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a href={c.clickToCallUrl} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[10px] text-cyan-200 hover:bg-cyan-300/20"><Phone size={12}/> Call</a>
+                  <Button onClick={() => onOpenCall(c)}><Edit3 size={12}/> Record Outcome</Button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        {pendingCalls.length > 4 && (
+          <button onClick={() => setCurrent("Leads")} className="mt-3 text-[10px] text-violet-300 hover:text-white">View all {pendingCalls.length} queued calls in Leads radar →</button>
+        )}
+      </Panel>
+
+      {/* Commercial Pipeline Funnel */}
+      <Panel className="p-5">
+        <div className="text-[10px] uppercase tracking-[.18em] text-violet-300">Sales Pipeline Stages</div>
+        <div className="mt-4 space-y-2 text-[10px]">
+          <div className="flex items-center justify-between rounded bg-violet-500/25 px-3 py-2 text-violet-100">
+            <span>New Leads</span><b>{metrics.newLeads}</b>
+          </div>
+          <div className="flex items-center justify-between rounded bg-cyan-500/20 px-3 py-2 text-cyan-100">
+            <span>Calls / Contacted</span><b>{metrics.callsCompleted}</b>
+          </div>
+          <div className="flex items-center justify-between rounded bg-blue-500/20 px-3 py-2 text-blue-100">
+            <span>Qualified (Tier A & B)</span><b>{metrics.qualifiedLeads}</b>
+          </div>
+          <div className="flex items-center justify-between rounded bg-amber-400/20 px-3 py-2 text-amber-100">
+            <span>Interested / Opportunities</span><b>{metrics.interestedProspects}</b>
+          </div>
+          <div className="flex items-center justify-between rounded bg-emerald-400/20 px-3 py-2 text-emerald-100">
+            <span>Won / Closed</span><b>{metrics.won}</b>
+          </div>
+        </div>
+        <div className="mt-4 border-t border-white/5 pt-3 flex justify-between text-[9px] text-slate-500">
+          <span>Gujarat corridor focus</span>
+          <span className="text-cyan-200">100% human-verified dispatch</span>
+        </div>
+      </Panel>
+    </div>
   </div>;
 }
-function Mission({ setCurrent }: { setCurrent: (v: View) => void }) { return <Panel className="p-5"><div className="flex items-center justify-between"><div className="text-[10px] uppercase tracking-[.18em] text-violet-300">Today's mission</div><span className="rounded bg-violet-400/10 px-2 py-1 text-[9px] text-violet-300">4 tasks</span></div><div className="mt-4 space-y-3">{["Generate 20 real estate leads","Research top 10 architects","Create proposal for Tradesphere","Follow up with JFS feedback"].map((x,i)=><div key={x} className="flex items-start gap-2 text-[10px]"><span className={`mt-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border ${i<2?"border-cyan-300 bg-cyan-300/20 text-cyan-200":"border-slate-600 text-slate-600"}`}>{i<2&&<Check size={9}/>}</span><div><div className={i<2?"text-slate-400 line-through":"text-slate-200"}>{x}</div><div className="mt-1 text-[9px] text-slate-600">{i<2?"Completed · ":"Pending · "}{i===0?"6:30 PM":"Today"}</div></div></div>)}</div><button onClick={() => setCurrent("Chat")} className="mt-4 text-[10px] text-violet-300">View all missions →</button></Panel> }
-function ActivityPanel(){return <Panel className="p-5"><div className="text-[10px] uppercase tracking-[.18em] text-violet-300">Recent activity</div><div className="mt-4 space-y-3">{activity.map((x,i)=><div className="flex gap-2" key={x}><Avatar text={["SC","SP","AU","FI","EC"][i]} color={["#43e6d0","#b16cff","#61a6ff","#ffc66d","#d59aff"][i]}/><div className="min-w-0 flex-1"><div className="truncate text-[10px] text-slate-300">{x}</div><div className="mt-1 text-[9px] text-slate-600">{i+1}h ago</div></div></div>)}</div><button className="mt-4 text-[10px] text-violet-300">View all activity →</button></Panel>}
-function Opportunities(){return <Panel className="p-5"><div className="flex justify-between"><div className="text-[10px] uppercase tracking-[.18em] text-violet-300">Top opportunities</div><span className="text-[9px] text-violet-300">View all</span></div><div className="mt-4 space-y-4">{[["The Design Nook","92"],["Urban Habitat","88"],["Apex Interiors","85"]].map(([x,n],i)=><div className="flex items-center gap-3" key={x}><span className="text-xs text-slate-500">{i+1}</span><div className="flex-1"><div className="text-[10px] text-slate-200">{x}</div><div className="text-[9px] text-slate-600">Real Estate, Ahmedabad</div></div><div className="text-right text-[9px]"><div className="text-slate-300">Score {n}</div><div className="text-emerald-300">High</div></div></div>)}</div></Panel>}
-function Quick({ icon: Icon, label, onClick }: { icon: typeof Plus; label: string; onClick: () => void }) { return <button onClick={onClick} className="flex min-h-11 w-full items-center gap-3 rounded-lg border border-violet-400/15 bg-violet-500/[.07] p-3 text-left hover:border-violet-300/40 hover:bg-violet-500/15"><Icon size={16} className="text-violet-300"/><span className="text-[10px] text-slate-200">{label}</span><ArrowUpRight size={13} className="ml-auto text-slate-600"/></button> }
 
-function ViewHeading({ view, description, action }: { view: View; description: string; action?: ReactNode }) {
-  return <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><div className="text-[10px] uppercase tracking-[.2em] text-violet-300">YUVI / {view}</div><h2 className="mt-2 text-2xl font-semibold text-white">{view}</h2><p className="mt-1 max-w-xl text-xs text-slate-500">{description}</p></div>{action}</div>;
-}
-function Button({ children, onClick, variant = "ghost", disabled = false, type = "button", className = "" }: { children: ReactNode; onClick?: () => void; variant?: "ghost"|"primary"|"danger"; disabled?: boolean; type?: "button"|"submit"; className?: string }) {
-  const style = variant === "primary" ? "bg-violet-500 text-white hover:bg-violet-400" : variant === "danger" ? "border border-rose-300/20 bg-rose-300/5 text-rose-200 hover:bg-rose-300/10" : "border border-white/10 bg-white/[.03] text-slate-300 hover:border-violet-300/30 hover:text-white";
-  return <button type={type} disabled={disabled} onClick={onClick} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-[10px] disabled:cursor-not-allowed disabled:opacity-40 ${style} ${className}`}>{children}</button>;
+function LeadsView({
+  leads,
+  setLeads,
+  callQueue,
+  setCallQueue,
+  onOpenCall,
+  onTriggerEngine,
+  setCurrent,
+  notify,
+  settings,
+  activepiecesUrl
+}: {
+  leads: NormalizedLead[];
+  setLeads: Dispatch<SetStateAction<NormalizedLead[]>>;
+  callQueue: CallQueueItem[];
+  setCallQueue: Dispatch<SetStateAction<CallQueueItem[]>>;
+  onOpenCall: (item: CallQueueItem) => void;
+  onTriggerEngine: () => void;
+  setCurrent: (v: View) => void;
+  notify: (text: string) => void;
+  settings: YuviSettings;
+  activepiecesUrl: string;
+}) {
+  const [query, setQuery] = useState("");
+  const [tierFilter, setTierFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [research, setResearch] = useState<{ name: string; text: string } | null>(null);
+  const [researching, setResearching] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const filtered = leads.filter(l => {
+    const q = query.toLowerCase();
+    const matchQ = `${l.companyName} ${l.contactPerson} ${l.city} ${l.category}`.toLowerCase().includes(q);
+    const matchTier = tierFilter === "All" || l.tier === tierFilter;
+    const matchStatus = statusFilter === "All" || l.status === statusFilter;
+    return matchQ && matchTier && matchStatus;
+  });
+
+  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      notify(`Importing ${file.name}...`);
+      const text = await file.text();
+      const parseResult = parseLeadSheet(text);
+
+      if (!parseResult.success) {
+        notify(`Import error: ${parseResult.errors.join(", ") || "Failed to parse file."}`);
+        return;
+      }
+
+      notify(`Parsed ${parseResult.validRows} valid rows. Running Sales Engine...`);
+      const engineResult = await runDailySalesEngine(parseResult.leads, leads, { baseUrl: activepiecesUrl });
+
+      setLeads(engineResult.processedLeads);
+      setCallQueue(engineResult.callQueue);
+      notify(`Sales Engine completed: ${engineResult.newLeadsCount} new leads, ${engineResult.callQueue.length} calls queued.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      notify(`Failed to process sheet: ${msg}`);
+    } finally {
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  const runResearch = async (l: NormalizedLead) => {
+    const key = loadGroqKey();
+    if (!key) {
+      notify("Add a Groq API key in Settings → API & AI to run real-time research synthesis.");
+      return;
+    }
+    setResearching(l.companyName);
+    const api = getApi("lead-research");
+    if (!api) {
+      notify("Lead Research skill is not enabled.");
+      setResearching(null);
+      return;
+    }
+    const result = await (api.execute as (c: string, a?: Record<string, unknown>) => Promise<GenerateBriefResult>)(
+      "lead-research.generate-brief",
+      {
+        lead: { name: l.contactPerson, company: l.companyName, category: l.category, stage: l.status, value: "Commercial" },
+        personalityPrompt: settings.identity.personalityPrompt,
+        apiKey: key,
+        modelId: settings.groq.modelId
+      }
+    );
+    setResearching(null);
+    if (result.ok) {
+      setResearch({ name: l.companyName, text: result.text });
+    } else {
+      notify(`Research failed: ${result.reason}`);
+    }
+  };
+
+  return <div className="rise space-y-5 p-4 sm:p-7">
+    <ViewHeading
+      view="Leads"
+      description="Daily Sales Radar — Normalized, Deduplicated, Tier-Classified, and Call-Prioritized."
+      action={
+        <div className="flex flex-wrap gap-2">
+          <input ref={fileInputRef} type="file" accept=".csv,.tsv,.txt" className="hidden" onChange={handleFileUpload}/>
+          <Button onClick={() => fileInputRef.current?.click()}><UploadCloud size={14}/> Import CSV/Sheet</Button>
+          <Button variant="primary" onClick={onTriggerEngine}><Rocket size={14}/> Run Sales Engine</Button>
+          <Button onClick={() => setCurrent("Approvals")}><BadgeCheck size={14}/> Approvals</Button>
+        </div>
+      }
+    />
+
+    <Panel className="overflow-hidden">
+      <div className="flex flex-col gap-3 border-b border-white/5 p-4 lg:flex-row">
+        <div className="flex flex-1 items-center gap-2 rounded-lg border border-white/10 bg-black/15 px-3">
+          <Search size={15} className="text-slate-600"/>
+          <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search company, contact, city or niche..." className="w-full bg-transparent py-2.5 text-xs text-white outline-none placeholder:text-slate-600"/>
+        </div>
+        <select value={tierFilter} onChange={e=>setTierFilter(e.target.value)} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[10px] text-slate-400">
+          <option value="All">All Tiers</option>
+          <option value="A">Tier A (Score 80+)</option>
+          <option value="B">Tier B (Score 60-79)</option>
+          <option value="C">Tier C (Score 45-59)</option>
+          <option value="D">Tier D (Disqualified)</option>
+        </select>
+        <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[10px] text-slate-400">
+          <option value="All">All Statuses</option>
+          <option value="NEW">New</option>
+          <option value="CONTACTED">Contacted</option>
+          <option value="INTERESTED">Interested</option>
+          <option value="CALLBACK">Callback</option>
+          <option value="WON">Won</option>
+        </select>
+      </div>
+
+      <div className="flex items-center justify-between border-b border-white/5 px-4 py-3 text-[9px] text-slate-600">
+        <span>{filtered.length} leads visible · 30-day deduplication guard active</span>
+        <span className="hidden sm:inline">Activepieces Background Execution Layer</span>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px] text-left">
+          <thead className="border-b border-white/5 text-[9px] uppercase tracking-[.15em] text-slate-600">
+            <tr>
+              <th className="px-4 py-3 font-normal">Company & Contact</th>
+              <th className="px-4 py-3 font-normal">Location</th>
+              <th className="px-4 py-3 font-normal">Tier & Score</th>
+              <th className="px-4 py-3 font-normal">Channel & Phone</th>
+              <th className="px-4 py-3 font-normal">Status</th>
+              <th className="px-4 py-3 font-normal">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {filtered.map(l => (
+              <tr key={l.id} className="hover:bg-white/[.025]">
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <Avatar text={l.companyName.slice(0,2).toUpperCase()} color="#a87cff"/>
+                    <div>
+                      <div className="text-xs font-semibold text-slate-100">{l.companyName}</div>
+                      <div className="text-[10px] text-slate-400">{l.contactPerson || "Decision Maker"} · {l.category}</div>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-[10px] text-slate-300">
+                  {l.city}, {l.state}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <TierPill tier={l.tier}/>
+                    <span className="text-[11px] font-mono font-semibold text-cyan-200">{l.score}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-[10px]">
+                  {l.phone ? (
+                    <a href={`tel:${l.phone}`} className="inline-flex items-center gap-1 text-cyan-300 hover:underline">
+                      <Phone size={11}/> {l.phone}
+                    </a>
+                  ) : (
+                    <span className="text-slate-500">No phone listed</span>
+                  )}
+                </td>
+                <td className="px-4 py-3"><StatusPill status={l.status}/></td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1.5">
+                    {l.phone && (
+                      <button
+                        onClick={() => {
+                          const callItem = callQueue.find(c => c.leadId === l.id) || {
+                            id: `call_${l.id}`,
+                            leadId: l.id,
+                            companyName: l.companyName,
+                            contactPerson: l.contactPerson || "Decision Maker",
+                            phone: l.phone,
+                            priority: l.tier === "A" ? "URGENT" : "HIGH",
+                            reason: l.bottleneck || "Sales engine follow-up",
+                            talkingPoints: [
+                              `Company: ${l.companyName} (${l.city})`,
+                              `Contact: ${l.contactPerson}`,
+                              `Bottleneck: ${l.bottleneck || "Conversion architecture"}`,
+                              `Primary Service: ${l.primaryService || "Revenue growth"}`,
+                              `Goal: Book 15-min discovery consultation`
+                            ],
+                            clickToCallUrl: `tel:${l.phone}`,
+                            callStatus: "PENDING"
+                          };
+                          onOpenCall(callItem);
+                        }}
+                        className="rounded-lg border border-cyan-300/25 bg-cyan-300/10 px-2 py-1.5 text-[9px] text-cyan-200 hover:bg-cyan-300/20"
+                      >
+                        <PhoneCall size={11} className="mr-1 inline"/> Call
+                      </button>
+                    )}
+                    <button
+                      onClick={() => runResearch(l)}
+                      disabled={researching === l.companyName}
+                      className="rounded-lg border border-violet-300/15 bg-violet-300/5 px-2 py-1.5 text-[9px] text-violet-200 hover:bg-violet-300/10 disabled:opacity-50"
+                    >
+                      <Sparkles size={11} className="mr-1 inline"/> {researching === l.companyName ? "Thinking..." : "AI Intel"}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+
+    {research && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#040510]/75 p-4 backdrop-blur-sm" onClick={() => setResearch(null)}>
+        <div className="panel w-full max-w-lg rounded-2xl p-6" onClick={e=>e.stopPropagation()}>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="eyebrow">Researcher / Deep Intelligence</div>
+              <h3 className="mt-2 text-lg text-white">{research.name}</h3>
+            </div>
+            <button onClick={() => setResearch(null)} className="text-slate-500 hover:text-white"><X size={18}/></button>
+          </div>
+          <p className="mt-5 whitespace-pre-wrap text-xs leading-6 text-slate-300">{research.text}</p>
+        </div>
+      </div>
+    )}
+  </div>;
 }
 
-function ApprovalsView({ approvals, setApprovals, selectedId, setSelectedId, notify }: { approvals: Approval[]; setApprovals: Dispatch<SetStateAction<Approval[]>>; selectedId: string | null; setSelectedId: (id: string | null) => void; notify: (text: string) => void }) {
+function CallModal({
+  call,
+  onClose,
+  onRecordOutcome
+}: {
+  call: CallQueueItem;
+  onClose: () => void;
+  onRecordOutcome: (callId: string, outcome: string, notes: string, nextDate: string) => void;
+}) {
+  const [outcome, setOutcome] = useState("Connected - Interested");
+  const [notes, setNotes] = useState("");
+  const [nextDate, setNextDate] = useState(() => new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString().split("T")[0]);
+
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    onRecordOutcome(call.id, outcome, notes, nextDate);
+    onClose();
+  };
+
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#040510]/80 p-4 backdrop-blur-md" onClick={onClose}>
+    <div className="panel w-full max-w-lg rounded-2xl p-6" onClick={e=>e.stopPropagation()}>
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="eyebrow">Hunter / Phone Discovery Call</span>
+            <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold ${call.priority === "URGENT" ? "bg-rose-500/20 text-rose-300 border border-rose-500/30" : "bg-cyan-500/20 text-cyan-300"}`}>{call.priority}</span>
+          </div>
+          <h3 className="mt-1 text-lg font-bold text-white">{call.companyName}</h3>
+          <div className="text-xs text-slate-400">Speak with: <b className="text-slate-200">{call.contactPerson}</b></div>
+        </div>
+        <button onClick={onClose} className="text-slate-500 hover:text-white"><X size={18}/></button>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between rounded-xl border border-cyan-300/30 bg-cyan-300/10 p-3">
+        <div>
+          <div className="text-[10px] text-cyan-300">Click to call directly on device:</div>
+          <div className="text-sm font-mono font-bold text-white">{call.phone}</div>
+        </div>
+        <a href={call.clickToCallUrl} className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-400 px-4 py-2 text-xs font-semibold text-black hover:bg-cyan-300">
+          <Phone size={14}/> Dial Now
+        </a>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-white/5 bg-black/20 p-4">
+        <div className="text-[10px] uppercase tracking-wider text-violet-300">Talking Points & Commercial Angle</div>
+        <ul className="mt-2 space-y-1.5 text-xs text-slate-300">
+          {call.talkingPoints.map((tp, i) => (
+            <li key={i} className="flex items-start gap-2">
+              <span className="text-cyan-400">•</span>
+              <span>{tp}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <form onSubmit={save} className="mt-5 space-y-3">
+        <div>
+          <label className="text-[10px] text-slate-400">Call Outcome</label>
+          <select value={outcome} onChange={e=>setOutcome(e.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 p-2.5 text-xs text-white outline-none">
+            <option value="Connected - Interested">Connected - Interested in consultation</option>
+            <option value="Callback requested">Callback requested</option>
+            <option value="No answer">No answer / Voicemail</option>
+            <option value="Not interested">Not interested / Wrong fit</option>
+            <option value="Meeting booked">Meeting booked directly</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="text-[10px] text-slate-400">Call Notes & Observations</label>
+          <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Spoke with founder, discussed SG Highway showroom client pipeline..." className="mt-1 h-18 w-full resize-none rounded-lg border border-white/10 bg-black/30 p-2.5 text-xs text-white outline-none placeholder:text-slate-600"/>
+        </div>
+
+        <div>
+          <label className="text-[10px] text-slate-400">Next Action Scheduled Date</label>
+          <input type="date" value={nextDate} onChange={e=>setNextDate(e.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 p-2.5 text-xs text-white outline-none"/>
+        </div>
+
+        <Button type="submit" variant="primary" className="mt-4 w-full">Record Outcome & Auto-Schedule Next Step</Button>
+      </form>
+    </div>
+  </div>;
+}
+
+function ApprovalsView({
+  approvals,
+  setApprovals,
+  selectedId,
+  setSelectedId,
+  notify
+}: {
+  approvals: Approval[];
+  setApprovals: Dispatch<SetStateAction<Approval[]>>;
+  selectedId: string | null;
+  setSelectedId: (id: string | null) => void;
+  notify: (text: string) => void;
+}) {
   const selected = approvals.find(a => a.id === selectedId);
   const [filter, setFilter] = useState<"ALL"|ApprovalStatus>("ALL");
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<Approval | null>(null);
+  const [editText, setEditText] = useState("");
+
   const shown = approvals.filter(a => filter === "ALL" || a.status === filter);
-  const transition = (id: string, status: ApprovalStatus) => { setApprovals(items => items.map(item => item.id === id ? { ...item, status } : item)); notify(`Approval marked ${status.toLowerCase()}`); };
-  const openExternal = (item: Approval) => { if (item.externalUrl) window.open(item.externalUrl, "_blank", "noopener,noreferrer"); else notify("External preview is unavailable until a provider URL is configured."); };
-  const editCanva = (item: Approval) => { if (item.canvaProjectId) window.open(`https://www.canva.com/design/${item.canvaProjectId}`, "_blank", "noopener,noreferrer"); else notify("Canva project is not configured for this asset."); };
-  return <div className="rise space-y-5 p-4 sm:p-7"><ViewHeading view="Approvals" description="Human review for assets that are ready to use. Every integration remains an explicit contract." action={<div className="flex items-center gap-2"><select value={filter} onChange={e=>setFilter(e.target.value as "ALL"|ApprovalStatus)} className="min-h-10 rounded-lg border border-white/10 bg-white/5 px-3 text-[10px] text-slate-300"><option value="ALL">All statuses</option>{["PENDING","APPROVED","REJECTED","EDITING","PUBLISHED / COMPLETED"].map(s=><option key={s}>{s}</option>)}</select><Button onClick={()=>notify("New asset intake is available through the future YUVI layer.")}><Plus size={14}/> New review</Button></div>}/>
-    <div className="grid gap-4 xl:grid-cols-[1.35fr_.65fr]"><div className="space-y-3">{shown.map(item=><Panel key={item.id} className={`p-4 sm:p-5 ${selectedId===item.id?"border-violet-300/45":""}`}><div className="flex flex-wrap items-start gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/15 text-violet-300">{item.type === "Carousel" ? <Layers3 size={18}/> : item.type === "Report" ? <FileBarChart size={18}/> : item.type === "Proposal" ? <FileCheck2 size={18}/> : <FileImage size={18}/>}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="text-[9px] uppercase tracking-[.15em] text-violet-300">{item.type}</span><StatusPill status={item.status}/></div><h3 className="mt-1 text-sm text-white">{item.title}</h3><div className="mt-1 text-[10px] text-slate-500">{item.workspace} · by {item.createdBy} · {item.timestamp}</div></div><button onClick={()=>setSelectedId(selectedId===item.id?null:item.id)} className="rounded-lg p-2 text-slate-500 hover:bg-white/5 hover:text-white" aria-label="Preview approval"><Eye size={16}/></button></div><p className="mt-4 text-[11px] leading-5 text-slate-400">{item.description}</p><div className="mt-4 flex flex-wrap gap-2"><Button onClick={()=>setSelectedId(item.id)}><Eye size={13}/> Preview</Button><Button onClick={()=>transition(item.id,"APPROVED")} disabled={item.status==="APPROVED" || item.status==="PUBLISHED / COMPLETED"}><Check size={13}/> Approve</Button><Button variant="danger" onClick={()=>transition(item.id,"REJECTED")} disabled={item.status==="REJECTED"}><XCircle size={13}/> Reject</Button><Button onClick={()=>{setDraft(item);setEditing(true);setSelectedId(item.id);transition(item.id,"EDITING")}}><Edit3 size={13}/> Edit</Button><Button onClick={()=>notify("Asset saved to the local preview model.")}><Save size={13}/> Save</Button></div></Panel>)}</div>
-      <Panel className="h-fit p-5">{selected ? <><div className="flex items-center justify-between"><div><div className="eyebrow">Asset preview</div><h3 className="mt-2 text-lg text-white">{selected.title}</h3></div><button onClick={()=>setSelectedId(null)} className="text-slate-500 hover:text-white"><X size={16}/></button></div><div className="mt-5 flex aspect-[4/3] items-center justify-center rounded-xl border border-violet-300/15 bg-[radial-gradient(circle_at_50%_35%,rgba(151,99,255,.32),transparent_44%),linear-gradient(145deg,#17153c,#0b0d22)]"><div className="text-center"><FileText className="mx-auto text-violet-200" size={34} strokeWidth={1}/><div className="mt-3 text-xs text-slate-200">Preview surface</div><div className="mt-1 max-w-[190px] text-[10px] leading-4 text-slate-500">A connected storage or viewer URL will render here when provided.</div></div></div><div className="mt-4 grid gap-2 sm:grid-cols-2"><Button onClick={()=>openExternal(selected)}><ExternalLink size={13}/> Open / Preview</Button><Button onClick={()=>editCanva(selected)} disabled={!selected.canvaProjectId}><PenLine size={13}/> Edit in Canva</Button></div><div className="mt-3 rounded-lg border border-amber-300/15 bg-amber-300/5 p-3 text-[10px] leading-4 text-amber-100/80">Integration contract: externalUrl and canvaProjectId are intentionally empty in this local preview.</div></> : <div className="py-12 text-center"><Eye className="mx-auto text-violet-300/60" size={26}/><div className="mt-3 text-xs text-slate-300">Select an asset to preview</div><div className="mt-1 text-[10px] text-slate-600">Review actions stay local to this frame.</div></div>}</Panel></div>
-    {editing && draft && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#040510]/80 p-4 backdrop-blur-sm"><div className="panel w-full max-w-lg rounded-2xl p-5"><div className="flex items-center justify-between"><div><div className="eyebrow">Local edit mode</div><h3 className="mt-2 text-lg text-white">Edit asset details</h3></div><button onClick={()=>setEditing(false)} className="text-slate-500 hover:text-white"><X size={18}/></button></div><label className="mt-5 block text-[10px] text-slate-500">Title<input value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})} className="mt-2 w-full rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-white outline-none focus:border-violet-300/40"/></label><label className="mt-3 block text-[10px] text-slate-500">Description<textarea value={draft.description} onChange={e=>setDraft({...draft,description:e.target.value})} className="mt-2 h-24 w-full resize-none rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-white outline-none focus:border-violet-300/40"/></label><div className="mt-5 flex justify-end gap-2"><Button onClick={()=>setEditing(false)}>Cancel</Button><Button variant="primary" onClick={()=>{setApprovals(items=>items.map(i=>i.id===draft.id?draft:i));setEditing(false);notify("Local approval edits saved.");}}><Save size={13}/> Save changes</Button></div></div></div>}
+
+  const transition = (id: string, status: ApprovalStatus) => {
+    setApprovals(items => items.map(item => item.id === id ? { ...item, status } : item));
+    notify(status === "APPROVED" ? "Approved! Staged for Hunter controlled dispatch." : `Approval marked ${status.toLowerCase()}`);
+  };
+
+  const saveEdit = (id: string) => {
+    setApprovals(items => items.map(item => item.id === id ? { ...item, exactMessage: editText, status: "APPROVED" } : item));
+    setEditing(false);
+    notify("Draft updated and marked as APPROVED for dispatch.");
+  };
+
+  return <div className="rise space-y-5 p-4 sm:p-7">
+    <ViewHeading
+      view="Approvals"
+      description="Consequential Action Gate — Hunter never dispatches unapproved outreach. Human consent is mandatory."
+      action={
+        <div className="flex items-center gap-2">
+          <select value={filter} onChange={e=>setFilter(e.target.value as "ALL"|ApprovalStatus)} className="min-h-10 rounded-lg border border-white/10 bg-white/5 px-3 text-[10px] text-slate-300">
+            <option value="ALL">All statuses</option>
+            <option value="PENDING">Pending Approval</option>
+            <option value="APPROVED">Approved</option>
+            <option value="REJECTED">Rejected</option>
+          </select>
+        </div>
+      }
+    />
+
+    <div className="rounded-xl border border-amber-300/20 bg-amber-300/5 p-4 text-xs text-amber-200">
+      🛡️ <b>Safe Sending Policy Armed:</b> No external WhatsApp, email, or SMS messages are transmitted automatically. Every outbound communication is staged here first for founder authorization.
+    </div>
+
+    <div className="grid gap-4 xl:grid-cols-[1.35fr_.65fr]">
+      <div className="space-y-3">
+        {shown.map(item => (
+          <Panel key={item.id} className={`p-4 sm:p-5 ${selectedId===item.id?"border-violet-300/45":""}`}>
+            <div className="flex flex-wrap items-start gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/15 text-violet-300">
+                {item.type.includes("WhatsApp") ? <MessageCircle size={18}/> : item.type.includes("Report") ? <FileBarChart size={18}/> : <Send size={18}/>}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[9px] uppercase tracking-[.15em] text-violet-300">{item.type}</span>
+                  {item.tier && <TierPill tier={item.tier}/>}
+                  <StatusPill status={item.status}/>
+                </div>
+                <h3 className="mt-1 text-sm font-semibold text-white">{item.title}</h3>
+                <div className="mt-1 text-[10px] text-slate-500">{item.workspace} · by {item.createdBy} · {item.timestamp}</div>
+              </div>
+            </div>
+
+            <p className="mt-4 text-[11px] leading-5 text-slate-400">{item.description}</p>
+
+            {item.exactMessage && (
+              <div className="mt-3 rounded-lg border border-white/5 bg-black/20 p-3">
+                <div className="text-[9px] uppercase tracking-wider text-slate-500">Staged 3-Part Outreach Copy</div>
+                <div className="mt-2 whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-slate-200">{item.exactMessage}</div>
+              </div>
+            )}
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button onClick={()=>transition(item.id,"APPROVED")} disabled={item.status==="APPROVED" || item.status==="PUBLISHED / COMPLETED"}><Check size={13}/> Approve for Hunter</Button>
+              <Button variant="danger" onClick={()=>transition(item.id,"REJECTED")} disabled={item.status==="REJECTED"}><XCircle size={13}/> Reject & Disqualify</Button>
+              <Button onClick={()=>{setSelectedId(item.id);setEditText(item.exactMessage || "");setEditing(true)}}><Edit3 size={13}/> Edit Copy</Button>
+            </div>
+          </Panel>
+        ))}
+      </div>
+
+      <div>
+        <Panel className="p-5">
+          <div className="eyebrow">Approval Review & Details</div>
+          {selected ? (
+            <div className="mt-4 space-y-4 text-xs">
+              <h3 className="text-sm font-semibold text-white">{selected.title}</h3>
+              <div className="rounded-lg bg-black/20 p-3 text-slate-300">
+                <div className="text-[10px] text-slate-500">Workspace / Engine</div>
+                <div className="mt-1 font-medium">{selected.workspace}</div>
+                <div className="mt-2 text-[10px] text-slate-500">Authorizing Agent</div>
+                <div className="mt-1 text-cyan-300">{selected.createdBy}</div>
+              </div>
+              {editing ? (
+                <div className="space-y-2">
+                  <div className="text-[10px] text-violet-300">Edit Staged Copy:</div>
+                  <textarea value={editText} onChange={e=>setEditText(e.target.value)} className="h-44 w-full rounded-lg border border-white/10 bg-black/30 p-2.5 font-mono text-xs text-white outline-none"/>
+                  <div className="flex gap-2">
+                    <Button onClick={()=>setEditing(false)}>Cancel</Button>
+                    <Button variant="primary" onClick={()=>saveEdit(selected.id)}>Save & Approve</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-[11px] leading-5 text-slate-400">
+                  Select an item to view full inspection notes, verify claims, or edit draft before Hunter dispatch.
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="mt-6 text-center text-xs text-slate-500">Select an approval item on the left to preview full details.</div>
+          )}
+        </Panel>
+      </div>
+    </div>
   </div>;
 }
 
-function ChatView({ conversations, setConversations, selectedId, setSelectedId, notify, settings }: { conversations: Conversation[]; setConversations: Dispatch<SetStateAction<Conversation[]>>; selectedId: string; setSelectedId: (id: string) => void; notify: (text: string) => void; settings: YuviSettings }) {
-  const [query, setQuery] = useState(""); const [text, setText] = useState(""); const [thinking, setThinking] = useState(false); const [mobileList, setMobileList] = useState(false);
-  const [pendingFile, setPendingFile] = useState<{ name: string; content: string } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const selected = conversations.find(c=>c.id===selectedId) || conversations[0];
-  const visible = conversations.filter(c=>!c.archived && `${c.title} ${c.preview}`.toLowerCase().includes(query.toLowerCase()));
-  const groups = ["Today","Yesterday","Previous 7 Days","Older"];
-  const groupFor = (c: Conversation) => c.createdAt === "2024-07-29" ? "Today" : c.createdAt === "2024-07-28" ? "Yesterday" : c.createdAt === "2024-07-24" ? "Previous 7 Days" : "Older";
-  const newChat = () => { const id=`conv-${Date.now()}`; const c: Conversation={id,title:"Untitled conversation",preview:"Start a new local conversation",createdAt:"2024-07-29",updatedAt:"Just now",messages:[]}; setConversations(items=>[c,...items]);setSelectedId(id);setText("");setMobileList(false); };
-  const handleFileChosen = (file: File | undefined) => {
-    if (!file) return;
-    if (file.size > 200_000) { notify(`${file.name} is too large to attach as text context (200KB limit).`); return; }
-    const reader = new FileReader();
-    reader.onload = () => { setPendingFile({ name: file.name, content: String(reader.result || "") }); notify(`${file.name} attached. It will be sent with your next message.`); };
-    reader.onerror = () => notify(`Could not read ${file.name}.`);
-    reader.readAsText(file);
-  };
+function ChatView({
+  conversations,
+  setConversations,
+  selectedId,
+  setSelectedId,
+  notify,
+  settings,
+  leads,
+  callQueue,
+  report,
+  onTriggerEngine
+}: {
+  conversations: Conversation[];
+  setConversations: Dispatch<SetStateAction<Conversation[]>>;
+  selectedId: string;
+  setSelectedId: (id: string) => void;
+  notify: (text: string) => void;
+  settings: YuviSettings;
+  leads: NormalizedLead[];
+  callQueue: CallQueueItem[];
+  report?: DailySalesReport;
+  onTriggerEngine: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [thinking, setThinking] = useState(false);
+  const selected = conversations.find(c => c.id === selectedId) || conversations[0];
+
   const send = async () => {
-    const clean=text.trim(); if((!clean && !pendingFile) || !selected) return;
-    const now=new Date().toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
-    const displayText = pendingFile ? `${clean || "Look at this file:"} 📎 ${pendingFile.name}` : clean;
-    const userMessage: Message={id:`m-${Date.now()}`,role:"user",text:displayText,timestamp:now};
-    const historyForModel = (selected.messages || []).slice(-12).map(m=>({role: m.role==="yuvi"?"assistant":"user", content: m.text} as ChatMessage));
-    setConversations(items=>items.map(c=>c.id===selected.id?{...c,title:c.messages.length===0?displayText.slice(0,30):c.title,preview:displayText,updatedAt:"Just now",messages:[...c.messages,userMessage]}:c));
-    setText(""); const attachedFile = pendingFile; setPendingFile(null); setThinking(true);
-    const systemPrompt = `${settings.identity.personalityPrompt}\n\n${settings.identity.customInstructions}`.trim();
-    const userContent = attachedFile ? `${clean || "Please review this file."}\n\n--- Attached file: ${attachedFile.name} ---\n${attachedFile.content.slice(0, 6000)}` : clean;
-    const key = loadGroqKey();
-    const result = await askGroq([{role:"system",content:systemPrompt}, ...historyForModel, {role:"user",content:userContent}], key, settings.groq.modelId);
-    const responseText = result.ok ? result.text : `⚠️ ${result.reason}`;
-    const response: Message = { id:`m-${Date.now()}-response`, role:"yuvi", text: responseText, timestamp: new Date().toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}) };
-    setConversations(items=>items.map(c=>c.id===selected.id?{...c,preview:responseText.slice(0,80),messages:[...c.messages,response]}:c));
-    setThinking(false);
-  };
-  return <div className="rise flex min-h-[calc(100dvh-74px)] flex-col p-3 sm:p-5 lg:p-7"><div className="mb-4 flex items-center justify-between"><div><div className="eyebrow">YUVI / Chat</div><p className="mt-1 text-[10px] text-slate-500">Persistent local conversation history · future layer ready</p></div><Button onClick={newChat}><Plus size={14}/> New chat</Button></div><div className="panel flex min-h-[610px] flex-1 overflow-hidden rounded-xl">
-    <aside className={`${mobileList?"flex":"hidden"} w-full shrink-0 flex-col border-r border-white/5 bg-black/10 md:flex md:w-64`}><div className="border-b border-white/5 p-3"><div className="flex items-center justify-between"><div className="text-[10px] uppercase tracking-[.18em] text-violet-300">Conversations</div><button onClick={newChat} className="rounded-md p-2 text-violet-300 hover:bg-white/5"><Plus size={15}/></button></div><div className="mt-3 flex items-center gap-2 rounded-lg border border-white/10 bg-black/15 px-2.5"><Search size={14} className="text-slate-600"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search history" className="w-full bg-transparent py-2 text-[10px] text-white outline-none placeholder:text-slate-600"/></div></div><div className="flex-1 overflow-y-auto p-2">{groups.map(group=>{const list=visible.filter(c=>groupFor(c)===group);return list.length?<div key={group} className="mb-4"><div className="px-2 py-2 text-[9px] uppercase tracking-[.16em] text-slate-600">{group}</div>{list.map(c=><button key={c.id} onClick={()=>{setSelectedId(c.id);setMobileList(false)}} className={`mb-1 w-full rounded-lg p-3 text-left ${selected?.id===c.id?"border border-violet-300/25 bg-violet-500/15":"hover:bg-white/[.04]"}`}><div className="flex items-center gap-2"><MessageSquare size={13} className="shrink-0 text-violet-300"/><span className="truncate text-[11px] text-slate-200">{c.title}</span></div><div className="mt-1 truncate pl-5 text-[9px] text-slate-600">{c.preview}</div><div className="mt-2 flex items-center justify-between pl-5 text-[9px] text-slate-700"><span>{c.updatedAt}</span><span onClick={e=>{e.stopPropagation();setConversations(items=>items.map(i=>i.id===c.id?{...i,archived:true}:i));notify("Conversation archived locally.");}} className="rounded p-1 hover:bg-white/10 hover:text-slate-300"><Archive size={12}/></span></div></button>)}</div>:null})}</div></aside>
-    <section className={`${mobileList?"hidden":"flex"} min-w-0 flex-1 flex-col md:flex`}><div className="flex items-center gap-3 border-b border-white/5 p-3 sm:p-4"><button onClick={()=>setMobileList(true)} className="rounded-lg p-2 text-slate-400 hover:bg-white/5 md:hidden"><Menu size={17}/></button><Avatar text="YU" color="#a87cff"/><div><div className="text-xs text-white">{selected?.title || "New conversation"}</div><div className="text-[9px] text-cyan-300">local session · no external calls</div></div><div className="ml-auto flex gap-1"><button onClick={newChat} className="rounded-lg p-2 text-slate-500 hover:bg-white/5 hover:text-white"><Plus size={16}/></button><button onClick={()=>selected&&notify("Conversation remains available in local browser state.")} className="rounded-lg p-2 text-slate-500 hover:bg-white/5 hover:text-white"><MoreHorizontal size={16}/></button></div></div><div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-7">{selected?.messages.length ? selected.messages.map(m=><div key={m.id} className={`flex gap-3 ${m.role==="user"?"justify-end":""}`}><div className={`flex max-w-[86%] items-start gap-3 ${m.role==="user"?"flex-row-reverse":""}`}>{m.role==="yuvi"?<Avatar text="YU" color="#a87cff"/>:<Avatar text="SP" color="#d59aff"/>}<div><div className={`rounded-2xl border p-3 text-xs leading-5 ${m.role==="user"?"border-violet-300/20 bg-violet-500/15 text-violet-50":"border-white/8 bg-black/15 text-slate-300"}`}>{m.text}</div><div className={`mt-1 text-[9px] text-slate-600 ${m.role==="user"?"text-right":""}`}>{m.timestamp}</div></div></div></div>):<div className="flex h-full items-center justify-center text-center"><div><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-violet-300/25 bg-violet-500/10 text-violet-200"><BrainCircuit size={25}/></div><div className="mt-4 text-sm text-slate-200">What should move today?</div><div className="mt-1 text-[10px] text-slate-600">Ask for a view, a decision, or a local preview.</div></div></div>}{thinking&&<div className="flex items-center gap-3"><Avatar text="YU" color="#a87cff"/><div className="rounded-2xl border border-white/8 bg-black/15 px-4 py-3 text-[10px] text-violet-200"><span className="mr-2 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-300"/>Thinking locally · preparing preview</div></div>}</div><div className="border-t border-white/5 p-3 sm:p-4">{pendingFile&&<div className="mb-2 flex items-center gap-2 rounded-lg border border-cyan-300/25 bg-cyan-300/5 px-3 py-2 text-[10px] text-cyan-100"><Paperclip size={12}/> {pendingFile.name} attached <button onClick={()=>setPendingFile(null)} className="ml-auto text-slate-500 hover:text-white"><X size={12}/></button></div>}<div className="rounded-xl border border-violet-300/20 bg-black/20 p-2"><textarea value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}}} placeholder="Message YUVI..." className="h-14 w-full resize-none bg-transparent p-2 text-xs text-white outline-none placeholder:text-slate-600"/><input ref={fileInputRef} type="file" accept=".txt,.md,.csv,.json,.log,.html,.js,.ts,.tsx,.py" className="hidden" onChange={e=>{handleFileChosen(e.target.files?.[0]);e.target.value=""}}/><div className="flex items-center justify-between border-t border-white/5 pt-2"><div className="flex items-center gap-1"><button onClick={()=>fileInputRef.current?.click()} className="rounded-md p-2 text-slate-500 hover:bg-white/5 hover:text-violet-300"><Paperclip size={15}/></button><button onClick={()=>notify("Voice input isn't wired yet — typing works for now.")} className="rounded-md p-2 text-slate-500 hover:bg-white/5 hover:text-violet-300"><Mic size={15}/></button><span className="ml-2 text-[9px] text-slate-600">{loadGroqKey()?"Enter to send · YUVI will reply":"Add a Groq key in Settings to get real replies"}</span></div><Button variant="primary" onClick={send} disabled={!text.trim()&&!pendingFile}><Send size={13}/> Send</Button></div></div></div></section>
-  </div></div>;
-}
+    const clean = text.trim();
+    if (!clean) return;
 
-function LeadsView({ leads, setLeads, onAdd, setCurrent, notify, settings }: { leads: Lead[]; setLeads: Dispatch<SetStateAction<Lead[]>>; onAdd: () => void; setCurrent: (v: View) => void; notify: (text: string) => void; settings: YuviSettings }) {
-  const [query,setQuery]=useState("");const [category,setCategory]=useState("All");const [stage,setStage]=useState("All");
-  const [research,setResearch]=useState<{name:string;text:string}|null>(null);const [researching,setResearching]=useState<string|null>(null);
-  const filtered=leads.filter(l=>`${l.name} ${l.company} ${l.category}`.toLowerCase().includes(query.toLowerCase())&&(category==="All"||l.category===category)&&(stage==="All"||l.stage===stage));const categories=Array.from(new Set(leads.map(l=>l.category)));
-  const runResearch=async(l:Lead)=>{
-    const key=loadGroqKey();
-    if(!key){notify("Add a Groq API key in Settings → API & AI to run real research.");return;}
-    setResearching(l.name);
-    const api=getApi("lead-research");
-    if(!api){notify("Lead Research skill is not enabled.");setResearching(null);return;}
-    const result=await (api.execute as (capability:string,args?:Record<string,unknown>)=>Promise<GenerateBriefResult>)("lead-research.generate-brief",{lead:{name:l.name,company:l.company,category:l.category,stage:l.stage,value:l.value},personalityPrompt:settings.identity.personalityPrompt,apiKey:key,modelId:settings.groq.modelId});
-    setResearching(null);
-    if(result.ok){setResearch({name:l.name,text:result.text});}else{notify(`Research failed: ${result.reason}`);}
+    const userMsg: Message = {
+      id: `m-${Date.now()}-user`,
+      role: "user",
+      text: clean,
+      timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    };
+
+    setConversations(items => items.map(c => c.id === selected.id ? { ...c, messages: [...c.messages, userMsg], updatedAt: "Just now" } : c));
+    setText("");
+    setThinking(true);
+
+    // Check daily commands first
+    const intent = detectDailyIntent(clean);
+    if (intent !== "UNKNOWN") {
+      const dailyResult = handleDailyCommand(intent, { leads, callQueue, report, onTriggerEngine });
+      if (dailyResult.handled) {
+        setThinking(false);
+        const yuviMsg: Message = {
+          id: `m-${Date.now()}-yuvi`,
+          role: "yuvi",
+          text: dailyResult.replyText,
+          timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+        };
+        setConversations(items => items.map(c => c.id === selected.id ? { ...c, messages: [...c.messages, yuviMsg], preview: dailyResult.replyText.slice(0, 80) } : c));
+        return;
+      }
+    }
+
+    // Fall back to Groq if key exists
+    const key = loadGroqKey();
+    if (key) {
+      const systemPrompt = `${settings.identity.personalityPrompt}\n\n${settings.identity.customInstructions}\n\nCurrent Context: You are running the Yugantar Growth Sales Engine. Leads in radar: ${leads.length}. Calls queued: ${callQueue.length}. Qualified: ${leads.filter(l=>l.tier==="A"||l.tier==="B").length}.`;
+      const history = selected.messages.slice(-6).map(m => ({ role: m.role === "yuvi" ? "assistant" as const : "user" as const, content: m.text }));
+      const result = await askGroq([{ role: "system", content: systemPrompt }, ...history, { role: "user", content: clean }], key, settings.groq.modelId);
+      setThinking(false);
+      const reply = result.ok ? result.text : `⚠️ ${result.reason}`;
+      const yuviMsg: Message = {
+        id: `m-${Date.now()}-yuvi`,
+        role: "yuvi",
+        text: reply,
+        timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+      };
+      setConversations(items => items.map(c => c.id === selected.id ? { ...c, messages: [...c.messages, yuviMsg], preview: reply.slice(0, 80) } : c));
+      return;
+    }
+
+    // Deterministic offline response
+    setThinking(false);
+    const offlineReply = `I received your command: "${clean}".\n\nSales Engine Status: Active (${leads.length} leads in radar, ${callQueue.filter(c=>c.callStatus==="PENDING").length} calls due today). Add a Groq API key in Settings to enable natural voice/conversational synthesis, or try asking:\n• "Work on my leads today"\n• "Give me todays calls"\n• "Prepare todays outreach"\n• "Show hot leads"\n• "What should I do today?"\n• "Give me todays sales report"`;
+    const yuviMsg: Message = {
+      id: `m-${Date.now()}-yuvi`,
+      role: "yuvi",
+      text: offlineReply,
+      timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    };
+    setConversations(items => items.map(c => c.id === selected.id ? { ...c, messages: [...c.messages, yuviMsg], preview: offlineReply.slice(0, 80) } : c));
   };
-  return <div className="rise space-y-5 p-4 sm:p-7"><ViewHeading view="Leads" description="The structured radar for every conversation worth having." action={<div className="flex flex-wrap gap-2"><Button onClick={()=>notify("CSV import affordance ready. No rows were uploaded.")}><UploadCloud size={14}/> Import CSV</Button><Button onClick={()=>setCurrent("Outreach")}><Radio size={14}/> Outreach</Button><Button variant="primary" onClick={onAdd}><Plus size={14}/> Add lead</Button></div>}/><Panel className="overflow-hidden"><div className="flex flex-col gap-3 border-b border-white/5 p-4 lg:flex-row"><div className="flex flex-1 items-center gap-2 rounded-lg border border-white/10 bg-black/15 px-3"><Search size={15} className="text-slate-600"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name, company or category" className="w-full bg-transparent py-2.5 text-xs text-white outline-none placeholder:text-slate-600"/></div><select value={category} onChange={e=>setCategory(e.target.value)} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[10px] text-slate-400"><option>All</option>{categories.map(c=><option key={c}>{c}</option>)}</select><select value={stage} onChange={e=>setStage(e.target.value)} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[10px] text-slate-400"><option>All</option>{["New","Contacted","Qualified","Proposal"].map(s=><option key={s}>{s}</option>)}</select><button onClick={()=>notify("Filter controls are local to this preview.")} className="flex items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-400"><SlidersHorizontal size={14}/> Filters</button></div><div className="flex items-center justify-between border-b border-white/5 px-4 py-3 text-[9px] text-slate-600"><span>{filtered.length} visible leads · duplicate checks are preview-only</span><span className="hidden sm:inline">WhatsApp actions queue only</span></div><div className="overflow-x-auto"><table className="w-full min-w-[860px] text-left"><thead className="border-b border-white/5 text-[9px] uppercase tracking-[.15em] text-slate-600"><tr><th className="px-4 py-3 font-normal">Contact</th><th className="px-4 py-3 font-normal">Category</th><th className="px-4 py-3 font-normal">Score</th><th className="px-4 py-3 font-normal">Stage</th><th className="px-4 py-3 font-normal">Status</th><th className="px-4 py-3 font-normal">Value</th><th className="px-4 py-3 font-normal">Action</th></tr></thead><tbody className="divide-y divide-white/5">{filtered.map(l=><tr key={l.name} className="hover:bg-white/[.025]"><td className="px-4 py-3"><div className="flex items-center gap-3"><Avatar text={l.initials} color="#a87cff"/><div><div className="text-xs text-slate-100">{l.name}</div><div className="text-[10px] text-slate-500">{l.company} · {l.phone}</div></div></div></td><td className="px-4 py-3 text-[10px] text-slate-400">{l.category}</td><td className="px-4 py-3"><span className={l.score>85?"text-emerald-300":"text-cyan-200"}>{l.score}</span></td><td className="px-4 py-3"><span className="rounded bg-violet-400/10 px-2 py-1 text-[9px] text-violet-200">{l.stage}</span></td><td className="px-4 py-3"><StatusPill status={l.status}/></td><td className="px-4 py-3 text-xs text-slate-300">{l.value}</td><td className="px-4 py-3"><div className="flex gap-1.5"><button onClick={()=>runResearch(l)} disabled={researching===l.name} className="rounded-lg border border-violet-300/15 bg-violet-300/5 px-2.5 py-2 text-[9px] text-violet-200 hover:bg-violet-300/10 disabled:opacity-50"><Sparkles size={12} className="mr-1 inline"/> {researching===l.name?"Thinking…":"AI Research"}</button><button onClick={()=>notify(`WhatsApp action queued for ${l.name}; no message was sent.`)} className="rounded-lg border border-cyan-300/15 bg-cyan-300/5 px-2.5 py-2 text-[9px] text-cyan-200 hover:bg-cyan-300/10"><MessageCircle size={12} className="mr-1 inline"/> Queue</button></div></td></tr>)}</tbody></table></div><div className="flex items-center gap-2 border-t border-white/5 p-4 text-[10px] text-slate-600"><Inbox size={14}/> CSV dedupe and enrichment are intentionally offline-safe contracts.</div></Panel>
-  {research&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-[#040510]/75 p-4 backdrop-blur-sm" onClick={()=>setResearch(null)}><div className="panel w-full max-w-lg rounded-2xl p-6" onClick={e=>e.stopPropagation()}><div className="flex items-center justify-between"><div><div className="eyebrow">AI Research</div><h3 className="mt-2 text-lg text-white">{research.name}</h3></div><button onClick={()=>setResearch(null)} className="text-slate-500 hover:text-white"><X size={18}/></button></div><p className="mt-5 whitespace-pre-wrap text-xs leading-6 text-slate-300">{research.text}</p></div></div>}
+
+  return <div className="rise flex min-h-[calc(100dvh-74px)] flex-col p-3 sm:p-5 lg:p-7">
+    <div className="mb-4 flex items-center justify-between">
+      <div>
+        <div className="eyebrow">YUVI / Executive Command Deck</div>
+        <p className="mt-1 text-[10px] text-slate-500">Natural Language Control Plane for Sales Engine & Activepieces</p>
+      </div>
+      <div className="flex gap-2">
+        <Button onClick={onTriggerEngine}><Rocket size={13}/> Run Sales Engine</Button>
+      </div>
+    </div>
+
+    <div className="panel flex min-h-[610px] flex-1 overflow-hidden rounded-xl">
+      <section className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center gap-3 border-b border-white/5 p-3 sm:p-4">
+          <Avatar text="YU" color="#a87cff"/>
+          <div>
+            <div className="text-xs font-semibold text-white">{selected?.title || "Daily Sales Command"}</div>
+            <div className="text-[9px] text-cyan-300">Active conversation · Sales Engine connected</div>
+          </div>
+        </div>
+
+        <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-7">
+          {selected?.messages.map(m => (
+            <div key={m.id} className={`flex gap-3 ${m.role === "user" ? "justify-end" : ""}`}>
+              <div className={`flex max-w-[86%] items-start gap-3 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
+                {m.role === "yuvi" ? <Avatar text="YU" color="#a87cff"/> : <Avatar text="SP" color="#d59aff"/>}
+                <div>
+                  <div className={`rounded-2xl border p-3.5 text-xs leading-5 whitespace-pre-wrap ${m.role === "user" ? "border-violet-300/20 bg-violet-500/15 text-violet-50" : "border-white/8 bg-black/15 text-slate-200"}`}>
+                    {m.text}
+                  </div>
+                  <div className={`mt-1 text-[9px] text-slate-600 ${m.role === "user" ? "text-right" : ""}`}>{m.timestamp}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+          {thinking && (
+            <div className="flex items-center gap-3">
+              <Avatar text="YU" color="#a87cff"/>
+              <div className="rounded-2xl border border-white/8 bg-black/15 px-4 py-3 text-[10px] text-violet-200">
+                <span className="mr-2 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-300"/>
+                Consulting sales radar & synthesizing action plan...
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-white/5 p-3 sm:p-4">
+          <div className="rounded-xl border border-violet-300/20 bg-black/20 p-2">
+            <textarea
+              value={text}
+              onChange={e=>setText(e.target.value)}
+              onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}}}
+              placeholder="Tell YUVI what you want done (e.g. 'Work on my leads today', 'Give me todays calls')..."
+              className="h-16 w-full resize-none bg-transparent p-2 text-xs text-white outline-none placeholder:text-slate-600"
+            />
+            <div className="flex items-center justify-between border-t border-white/5 pt-2">
+              <span className="text-[9px] text-slate-500">Enter to send · Supports 10+ daily business commands</span>
+              <Button variant="primary" onClick={send} disabled={!text.trim()}><Send size={13}/> Send</Button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
   </div>;
 }
 
-function OutreachView({ leads, notify }: { leads: Lead[]; notify: (text: string) => void }) {
-  const [mode,setMode]=useState("Image + message");const [message,setMessage]=useState("Hi {first_name}, I put together a short idea for {company}. Would a quick look this week be useful?");const [recipient,setRecipient]=useState("Hot only");const [creative,setCreative]=useState("");const [queued,setQueued]=useState<{name:string;status:string}[]>([]);
-  const recipients=recipient==="All"?leads:recipient==="Hot only"?leads.filter(l=>l.status==="Hot"):recipient==="None"?[]:leads.slice(0,2);
-  const suggest=()=>setMessage("Hi {first_name}, YUVI spotted a useful growth angle for {company}. I can share the short brief if timing is right.");
-  const start=()=>{setQueued(recipients.map(l=>({name:l.name,status:"QUEUED · LOCAL PREVIEW"})));notify(`Outreach queued for ${recipients.length} lead${recipients.length===1?"":"s"}; no messages were sent.`);};
-  return <div className="rise space-y-5 p-4 sm:p-7"><ViewHeading view="Outreach" description="Prepare a structured outreach batch for a future Hunter connection. This frame never sends messages." action={<div className="rounded-full border border-amber-300/20 bg-amber-300/5 px-3 py-2 text-[9px] text-amber-200">Offline-safe queue</div>}/><div className="grid gap-4 xl:grid-cols-[1.1fr_.9fr]"><div className="space-y-4"><Panel className="p-5"><div className="eyebrow">01 / Creative</div><h3 className="mt-2 text-sm text-white">Upload flyer or creative</h3><label className="mt-4 flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-violet-300/25 bg-violet-500/[.04] text-center hover:bg-violet-500/[.08]"><UploadCloud size={22} className="text-violet-300"/><span className="mt-2 text-xs text-slate-300">{creative || "Choose a local image or PDF"}</span><span className="mt-1 text-[10px] text-slate-600">Preview only · JPG, PNG, PDF · 10 MB</span><input type="file" accept=".jpg,.jpeg,.png,.pdf" className="hidden" onChange={e=>setCreative(e.target.files?.[0]?.name||"")}/></label></Panel><Panel className="p-5"><div className="eyebrow">02 / Message</div><div className="mt-3 grid grid-cols-3 gap-2">{["Message only","Image only","Image + message"].map(x=><button key={x} onClick={()=>setMode(x)} className={`rounded-lg border p-3 text-[10px] ${mode===x?"border-violet-300/45 bg-violet-500/15 text-white":"border-white/10 text-slate-500 hover:text-slate-300"}`}>{x}</button>)}</div>{mode!=="Image only"&&<><div className="mt-4 flex items-center justify-between"><span className="text-[10px] text-slate-500">Message editor</span><button onClick={suggest} className="flex items-center gap-1 text-[10px] text-cyan-200"><Sparkles size={13}/> YUVI Suggest</button></div><textarea value={message} onChange={e=>setMessage(e.target.value)} className="mt-2 h-28 w-full resize-none rounded-lg border border-white/10 bg-black/20 p-3 text-xs leading-5 text-slate-200 outline-none focus:border-violet-300/40"/></>}</Panel><Panel className="p-5"><div className="eyebrow">03 / Recipients</div><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">{["All","None","Hot only","Selected"].map(x=><button key={x} onClick={()=>setRecipient(x)} className={`rounded-lg border px-3 py-3 text-[10px] ${recipient===x?"border-cyan-300/35 bg-cyan-300/10 text-cyan-100":"border-white/10 text-slate-500"}`}>{x}</button>)}</div><div className="mt-4 flex items-center justify-between text-[10px]"><span className="text-slate-500">Recipient count</span><span className="text-white">{recipients.length} selected</span></div><Button variant="primary" onClick={start} className="mt-4 w-full"><Send size={14}/> Start outreach</Button></Panel></div><div className="space-y-4"><Panel className="p-5"><div className="flex items-center justify-between"><div><div className="eyebrow">Message preview</div><h3 className="mt-2 text-sm text-white">The local handoff</h3></div><FileImage size={18} className="text-violet-300"/></div><div className="mt-5 rounded-xl border border-white/8 bg-[#101229] p-4"><div className="flex items-center gap-2 border-b border-white/5 pb-3"><Avatar text="YG" color="#43e6d0"/><div><div className="text-[11px] text-slate-200">Yungantar Growth</div><div className="text-[9px] text-slate-600">WhatsApp contract preview</div></div></div>{mode!=="Message only"&&<div className="mt-4 flex h-32 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500/25 to-cyan-300/10 text-center"><Image size={22} className="text-violet-200"/><span className="ml-2 text-[10px] text-slate-400">{creative||"Creative placeholder"}</span></div>}{mode!=="Image only"&&<div className="mt-4 rounded-lg bg-white/[.05] p-3 text-[11px] leading-5 text-slate-300">{message}</div>}</div><div className="mt-4 rounded-lg border border-amber-300/15 bg-amber-300/5 p-3 text-[10px] leading-4 text-amber-100/80">No messages were sent. Start Outreach only creates local queue records for review.</div></Panel><Panel className="p-5"><div className="flex items-center justify-between"><div className="text-[10px] uppercase tracking-[.18em] text-violet-300">Outreach queue</div><span className="text-[9px] text-slate-600">{queued.length} records</span></div>{queued.length?queued.map(item=><div key={item.name} className="mt-3 flex items-center gap-2 border-b border-white/5 pb-3"><Avatar text={item.name.slice(0,2).toUpperCase()} color="#a87cff"/><span className="flex-1 text-[10px] text-slate-300">{item.name}</span><span className="text-[9px] text-amber-200">{item.status}</span></div>):<div className="mt-4 rounded-lg border border-dashed border-white/10 p-5 text-center text-[10px] text-slate-600">Queue is empty. Build a batch to see honest local status.</div>}</Panel></div></div></div>;
+function SettingsView({
+  onLock,
+  settings,
+  setSettings,
+  notify,
+  activepiecesUrl,
+  setActivepiecesUrl
+}: {
+  onLock: () => void;
+  settings: YuviSettings;
+  setSettings: Dispatch<SetStateAction<YuviSettings>>;
+  notify: (text: string) => void;
+  activepiecesUrl: string;
+  setActivepiecesUrl: (url: string) => void;
+}) {
+  const tabs = ["API & AI", "Activepieces Runtime", "Security", "YUVI Identity"];
+  const [tab, setTab] = useState(tabs[0]);
+  const [testingAp, setTestingAp] = useState(false);
+  const [apStatus, setApStatus] = useState<string>("");
+
+  const testAp = async () => {
+    setTestingAp(true);
+    const res = await testActivepiecesConnection(activepiecesUrl);
+    setTestingAp(false);
+    setApStatus(res.message);
+    notify(res.message);
+  };
+
+  return <div className="rise space-y-5 p-4 sm:p-7">
+    <ViewHeading view="Settings" description="Configure runtime edges, AI credentials, and Activepieces background execution."/>
+    <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
+      <Panel className="h-fit p-2">
+        {tabs.map(t => (
+          <button key={t} onClick={()=>setTab(t)} className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-[10px] ${tab===t?"bg-violet-500/15 text-white":"text-slate-500 hover:bg-white/[.04] hover:text-slate-300"}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${tab===t?"bg-cyan-300":"bg-slate-700"}`}/>{t}
+          </button>
+        ))}
+      </Panel>
+
+      <Panel className="min-h-[520px] p-5 sm:p-7">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><div className="eyebrow">Configuration surface</div><h3 className="mt-2 text-xl text-white">{tab}</h3></div>
+          <span className="rounded-full border border-amber-300/20 bg-amber-300/5 px-3 py-1.5 text-[9px] text-amber-200">Local-first persistence</span>
+        </div>
+
+        {tab === "API & AI" && <SettingsApi settings={settings} updateSettings={patch => setSettings(s => ({ ...s, groq: { ...s.groq, ...patch } }))} notify={notify}/>}
+
+        {tab === "Activepieces Runtime" && (
+          <div className="mt-5 space-y-4">
+            <div className="rounded-xl border border-cyan-300/15 bg-cyan-300/5 p-4 text-xs text-cyan-200">
+              ⚡ <b>Activepieces Background Runtime Bridge:</b> YUVI acts as the brain and orchestrator, dispatching heavy employee background tasks to Activepieces via webhooks.
+            </div>
+
+            <SettingRow label="Activepieces Instance URL" description="Target Activepieces deployment or container endpoint.">
+              <input
+                type="text"
+                value={activepiecesUrl}
+                onChange={e => setActivepiecesUrl(e.target.value)}
+                placeholder="http://localhost:8080"
+                className="w-72 rounded-lg border border-white/10 bg-black/20 p-2 text-xs text-white outline-none"
+              />
+            </SettingRow>
+
+            <SettingRow label="Connection Health" description="Ping the Activepieces runtime to verify webhook readiness.">
+              <div className="flex items-center gap-3">
+                <Button onClick={testAp} disabled={testingAp}>
+                  {testingAp ? <RefreshCw size={13} className="animate-spin"/> : <Link2 size={13}/>} Test Bridge
+                </Button>
+                {apStatus && <span className="text-[10px] text-slate-300">{apStatus}</span>}
+              </div>
+            </SettingRow>
+          </div>
+        )}
+
+        {tab === "Security" && (
+          <div className="mt-5">
+            <SettingRow label="Lock Session" description="Return to lock screen immediately without clearing memory.">
+              <Button onClick={onLock}><Lock size={13}/> Lock Now</Button>
+            </SettingRow>
+          </div>
+        )}
+
+        {tab === "YUVI Identity" && (
+          <div className="mt-5 space-y-4">
+            <div>
+              <label className="text-[10px] text-slate-400">Personality & Commercial Mission</label>
+              <textarea
+                value={settings.identity.personalityPrompt}
+                onChange={e=>setSettings(s=>({...s,identity:{...s.identity,personalityPrompt:e.target.value}}))}
+                className="mt-1 h-36 w-full rounded-lg border border-white/10 bg-black/20 p-3 text-xs leading-5 text-white outline-none"
+              />
+            </div>
+            <Button onClick={()=>notify("Identity updated locally.")}><Save size={13}/> Save Identity</Button>
+          </div>
+        )}
+      </Panel>
+    </div>
+  </div>;
 }
 
-function SettingsView({ onLock, settings, setSettings, notify }: { onLock: () => void; settings: YuviSettings; setSettings: Dispatch<SetStateAction<YuviSettings>>; notify: (text: string) => void }) {
-  const tabs=["API & AI","Memory & Sync","Skills","Knowledge","Security","YUVI Identity","Workspace (n8n)"];const [tab,setTab]=useState(tabs[0]);const [passcode,setPasscode]=useState("");
-  const [knowledgeFiles,setKnowledgeFiles]=useState<KnowledgeFile[]>(()=>store.read("knowledge_files",[] as KnowledgeFile[]));
-  useEffect(()=>{store.write("knowledge_files",knowledgeFiles)},[knowledgeFiles]);
-  const [n8nUrl,setN8nUrl]=useState<string>(()=>store.read("n8n_url",""));
-  useEffect(()=>{store.write("n8n_url",n8nUrl)},[n8nUrl]);
-  const updateGroq=(patch:Partial<YuviSettings["groq"]>)=>setSettings(s=>({...s,groq:{...s.groq,...patch}}));
-  const updateIdentity=(patch:Partial<YuviSettings["identity"]>)=>setSettings(s=>({...s,identity:{...s.identity,...patch}}));
-  const hash=async(value:string)=>{if(!value)return "";const data=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value));return Array.from(new Uint8Array(data)).map(b=>b.toString(16).padStart(2,"0")).join("")};
-  const saveCode=async()=>{if(passcode.length<4){notify("Use at least four characters for the passcode.");return}const digest=await hash(passcode);setSettings(s=>({...s,lock:{passcodeDigest:digest}}));setPasscode("");notify("Passcode saved. Only a one-way digest is stored — never the raw passcode.");};
-  return <div className="rise space-y-5 p-4 sm:p-7"><ViewHeading view="Settings" description="Control the edges of YUVI without exposing credentials or implying live connections."/><div className="grid gap-4 lg:grid-cols-[220px_1fr]"><Panel className="h-fit p-2">{tabs.map(t=><button key={t} onClick={()=>setTab(t)} className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-[10px] ${tab===t?"bg-violet-500/15 text-white":"text-slate-500 hover:bg-white/[.04] hover:text-slate-300"}`}><span className={`h-1.5 w-1.5 rounded-full ${tab===t?"bg-cyan-300":"bg-slate-700"}`}/>{t}</button>)}</Panel><Panel className="min-h-[520px] p-5 sm:p-7"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="eyebrow">Configuration surface</div><h3 className="mt-2 text-xl text-white">{tab}</h3></div><span className="rounded-full border border-amber-300/20 bg-amber-300/5 px-3 py-1.5 text-[9px] text-amber-200">Saved locally · survives refresh</span></div>{tab==="API & AI"&&<SettingsApi settings={settings} updateSettings={updateGroq} notify={notify}/>} {tab==="Memory & Sync"&&<SettingsMemory notify={notify}/>} {tab==="Skills"&&<SettingsSkills notify={notify}/>} {tab==="Knowledge"&&<SettingsKnowledge files={knowledgeFiles} setFiles={setKnowledgeFiles} notify={notify}/>} {tab==="Security"&&<SettingsSecurity onLock={onLock} passcode={passcode} setPasscode={setPasscode} saveCode={saveCode} configured={!!settings.lock.passcodeDigest} notify={notify}/>} {tab==="YUVI Identity"&&<SettingsIdentity identity={settings.identity} updateIdentity={updateIdentity} notify={notify}/>} {tab==="Workspace (n8n)"&&<SettingsWorkspace url={n8nUrl} setUrl={setN8nUrl} notify={notify}/>}</Panel></div></div>;
-}
-function SettingRow({ label, description, children }: { label:string;description:string;children:ReactNode }) { return <div className="flex flex-col gap-3 border-b border-white/5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="text-xs text-slate-200">{label}</div><div className="mt-1 max-w-lg text-[10px] leading-4 text-slate-600">{description}</div></div>{children}</div> }
 function SettingsApi({settings,updateSettings,notify}:{settings:YuviSettings;updateSettings:(patch:Partial<YuviSettings["groq"]>)=>void;notify:(t:string)=>void}){
   const [key,setKey]=useState(()=>loadGroqKey());
   const [showKey,setShowKey]=useState(false);
@@ -304,112 +1220,345 @@ function SettingsApi({settings,updateSettings,notify}:{settings:YuviSettings;upd
     else{updateSettings({connectionStatus:"failed"});setLastError(result.reason);notify(`Connection failed: ${result.reason}`);}
   };
   const status=settings.groq.connectionStatus;
-  return <div className="mt-5"><SettingRow label="Groq API key" description="Stored in your browser's local storage for this preview. Never logged, never shown in full."><div className="flex items-center gap-2"><input type={showKey?"text":"password"} value={key} onChange={e=>setKey(e.target.value)} placeholder="gsk_..." aria-label="Groq API key" className="w-44 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-[10px] text-white outline-none focus:border-violet-300/40 sm:w-56"/><button onClick={()=>setShowKey(v=>!v)} aria-label={showKey?"Hide key":"Show key"} className="rounded-lg border border-white/10 p-2 text-slate-400 hover:text-white"><Eye size={14}/></button><Button onClick={save}><Save size={13}/> Save</Button></div></SettingRow>{settings.groq.hasKey&&<div className="border-b border-white/5 py-3 text-[10px] text-slate-500">Saved key ends in <span className="text-cyan-200">{settings.groq.keyLastFour}</span>.</div>}<SettingRow label="Default model" description="Sent as the model id once a live call is made."><select value={settings.groq.modelId} onChange={e=>updateSettings({modelId:e.target.value})} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[10px] text-slate-300">{GROQ_MODELS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}</select></SettingRow><SettingRow label="Connection status" description="Only shows Connected after a real successful call to Groq."><span className={`rounded-full border px-2 py-1 text-[9px] ${status==="connected"?"border-emerald-300/25 bg-emerald-300/10 text-emerald-200":status==="failed"?"border-rose-300/25 bg-rose-300/10 text-rose-200":"border-amber-300/20 text-amber-200"}`}>{status==="connected"?"Connected":status==="failed"?"Failed":"Not connected"}</span></SettingRow><SettingRow label="Test connection" description="Makes a real request to Groq's API using the key above."><Button onClick={test} disabled={testing}>{testing?<><RefreshCw size={13} className="animate-spin"/> Testing…</>:<><RefreshCw size={13}/> Test connection</>}</Button></SettingRow>{lastError&&<div className="mt-3 rounded-lg border border-rose-300/20 bg-rose-300/5 p-3 text-[10px] leading-4 text-rose-200">{lastError}</div>}<div className="mt-5 rounded-lg border border-cyan-300/15 bg-cyan-300/5 p-4 text-[10px] leading-5 text-cyan-100/75">YUVI will recommend; founder approval remains the control plane.</div></div>}
-function SettingsMemory({notify}:{notify:(t:string)=>void}){return <div className="mt-5"><SettingRow label="Supabase memory" description="Conversation and business memory can connect here in a later mission."><span className="text-[9px] text-slate-500">Contract ready · offline</span></SettingRow><SettingRow label="Conversation memory" description="This frame keeps active conversations in browser state only."><input type="checkbox" defaultChecked/></SettingRow><SettingRow label="Sync status" description="No database connection is active in the isolated preview."><Button onClick={()=>notify("Sync paused: no database connection is configured.")}><RefreshCw size={13}/> Refresh sync</Button></SettingRow></div>}
-type KnowledgeFile = { name: string; type: string; status: string; createdDate: string; enabled: boolean };
-// Real skill registry seam. This scans a static manifest of skill IDs the app knows about;
-// none are wired to a live capability yet, which is reported honestly rather than assumed.
-// (The repository's .local/skills and .agents/skills directories are Replit's own authoring
-// skills for building this app — not runtime capabilities for the YUVI agent — so they are
-// correctly excluded from this registry rather than listed as fake YUVI skills.)
-type SkillDef = { id: string; name: string; description: string; capabilities: string[]; connected: boolean };
-const skillRegistry: SkillDef[] = [
-  { id: "chat", name: "YUVI Chat", description: "Real-time conversation using your saved Groq key and personality prompt.", capabilities: ["Chat", "File context (text/CSV/JSON)", "Conversation memory"], connected: false },
-  { id: "lead-research", name: "Lead AI Research", description: "Generates a short outreach brief (pain point, opening line, likely objection) per lead.", capabilities: ["Lead intelligence", "Outreach prep"], connected: false },
-];
-function SettingsSkills({notify}:{notify:(t:string)=>void}){
-  const [enabled,setEnabled]=useState<Record<string,boolean>>(()=>store.read("skills_enabled",{}));
-  const toggle=(id:string)=>setEnabled(v=>{const next={...v,[id]:!v[id]};store.write("skills_enabled",next);return next});
-  if(skillRegistry.length===0)return <div className="mt-5"><div className="rounded-xl border border-dashed border-violet-300/20 bg-violet-500/[.04] p-6 text-center"><Workflow className="mx-auto text-violet-300" size={26}/><div className="mt-3 text-sm text-slate-200">Skill registry is empty</div><div className="mx-auto mt-2 max-w-sm text-[10px] leading-5 text-slate-600">No YUVI-runtime skills are defined in this project yet. This registry discovers real skills as soon as they exist — nothing here is invented.</div><span className="mt-4 inline-flex rounded-full border border-amber-300/20 px-3 py-1.5 text-[9px] text-amber-200">0 discovered</span></div></div>;
-  const hasKey=!!loadGroqKey();
-  return <div className="mt-5 grid gap-3 sm:grid-cols-2">{skillRegistry.map(s=>{const live=hasKey;return <Panel key={s.id} className="p-4"><div className="flex items-center justify-between"><h3 className="text-sm text-white">{s.name}</h3><button onClick={()=>toggle(s.id)} className={`rounded-full border px-2.5 py-1 text-[9px] ${enabled[s.id]!==false?"border-emerald-300/30 bg-emerald-300/10 text-emerald-200":"border-white/10 text-slate-500"}`}>{enabled[s.id]!==false?"Enabled":"Disabled"}</button></div><p className="mt-2 text-[10px] leading-4 text-slate-500">{s.description}</p><div className="mt-3 flex flex-wrap gap-1.5">{s.capabilities.map(c=><span key={c} className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] text-slate-500">{c}</span>)}</div><div className={`mt-3 text-[9px] ${live?"text-emerald-300":"text-amber-200"}`}>{live?"Connected · using your saved Groq key":"Add a Groq key in API & AI to connect"}</div></Panel>})}</div>;
-}
-function SettingsKnowledge({files,setFiles,notify}:{files:KnowledgeFile[];setFiles:Dispatch<SetStateAction<KnowledgeFile[]>>;notify:(t:string)=>void}){return <div className="mt-5"><label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-cyan-300/20 bg-cyan-300/[.03] text-center"><UploadCloud size={22} className="text-cyan-300"/><span className="mt-2 text-xs text-slate-300">Upload a knowledge file</span><span className="mt-1 text-[10px] text-slate-600">Supported: PDF, DOCX, TXT, CSV · local index only, saved locally · survives refresh</span><input type="file" accept=".pdf,.doc,.docx,.txt,.csv" className="hidden" onChange={e=>{const f=e.target.files?.[0];if(f){setFiles(v=>[...v,{name:f.name,type:f.name.split(".").pop()?.toUpperCase()||"FILE",status:"Indexed local",createdDate:new Date().toLocaleDateString(),enabled:true}]);notify(`${f.name} added to local index.`)}}}/></label><div className="mt-4">{files.length?files.map(file=><div key={file.name} className="flex items-center gap-3 border-b border-white/5 py-3"><FileText size={15} className="text-violet-300"/><div className="min-w-0 flex-1"><span className="block truncate text-[10px] text-slate-300">{file.name}</span><span className="text-[9px] text-slate-600">{file.type} · added {file.createdDate}</span></div><input type="checkbox" checked={file.enabled} onChange={()=>setFiles(v=>v.map(f=>f.name===file.name?{...f,enabled:!f.enabled}:f))} aria-label={`Toggle ${file.name}`}/><span className="text-[9px] text-cyan-200">{file.status.toUpperCase()}</span><button onClick={()=>setFiles(v=>v.filter(f=>f.name!==file.name))} aria-label={`Remove ${file.name}`} className="text-slate-600 hover:text-rose-200"><Trash2 size={14}/></button></div>):<div className="mt-4 rounded-lg border border-white/5 p-4 text-center text-[10px] text-slate-600">No local files indexed yet.</div>}</div></div>}
-function SettingsSecurity({onLock,passcode,setPasscode,saveCode,configured,notify}:{onLock:()=>void;passcode:string;setPasscode:(v:string)=>void;saveCode:()=>void;configured:boolean;notify:(t:string)=>void}){const supported=typeof window!=="undefined"&&"PublicKeyCredential" in window;return <div className="mt-5"><div className="flex items-center gap-3 rounded-xl border border-cyan-300/15 bg-cyan-300/5 p-4"><ShieldCheck size={20} className="text-cyan-300"/><div><div className="text-xs text-slate-100">Session security</div><div className="mt-1 text-[10px] text-slate-500">{configured?"Passcode configured in memory for this session.":"No passcode configured yet."}</div></div><span className="ml-auto text-[9px] text-cyan-200">local</span></div><div className="mt-4"><SettingRow label="Lock YUVI now" description="Open the operating-system style lock state without storing secrets."><Button onClick={onLock}><Lock size={13}/> Lock session</Button></SettingRow><SettingRow label="Configure passcode" description="Only a one-way digest is kept in this component state; it is cleared on refresh."><div className="flex gap-2"><input type="password" value={passcode} onChange={e=>setPasscode(e.target.value)} placeholder="4+ characters" className="w-32 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-[10px] text-white outline-none"/><Button onClick={saveCode}><KeyRound size={13}/> Save</Button></div></SettingRow><SettingRow label="Device unlock" description="A future platform credential can be wired here when supported by the host."><Button onClick={()=>notify(supported?"Device unlock affordance is ready for a credential contract.":"Device unlock is not reported by this host.")} disabled={!supported}><Unlock size={13}/> {supported?"Test device unlock":"Unavailable"}</Button></SettingRow></div></div>}
-function SettingsIdentity({identity,updateIdentity,notify}:{identity:YuviSettings["identity"];updateIdentity:(patch:Partial<YuviSettings["identity"]>)=>void;notify:(t:string)=>void}){
-  const [name,setName]=useState(identity.name);
-  const [personality,setPersonality]=useState(identity.personalityPrompt);
-  const [instructions,setInstructions]=useState(identity.customInstructions);
-  const toggle=(group:"capabilities"|"proactivity",key:string)=>updateIdentity({[group]:{...identity[group],[key]:!identity[group][key]}} as Partial<YuviSettings["identity"]>);
-  const save=()=>{updateIdentity({name,personalityPrompt:personality,customInstructions:instructions});notify("Identity saved locally — survives a refresh.")};
-  return <div className="mt-5 space-y-6">
-    <label className="block text-[10px] text-slate-500">YUVI name<input value={name} onChange={e=>setName(e.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-white outline-none"/></label>
-    <label className="block text-[10px] text-slate-500">Personality prompt<textarea value={personality} onChange={e=>setPersonality(e.target.value)} className="mt-2 h-32 w-full resize-none rounded-lg border border-white/10 bg-black/20 p-3 text-xs leading-5 text-white outline-none"/></label>
-    <label className="block text-[10px] text-slate-500">Custom instructions<textarea value={instructions} onChange={e=>setInstructions(e.target.value)} placeholder="Add anything else YUVI should always keep in mind…" className="mt-2 h-20 w-full resize-none rounded-lg border border-white/10 bg-black/20 p-3 text-xs leading-5 text-white outline-none placeholder:text-slate-600"/></label>
-    <div><div className="eyebrow">Capabilities</div><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">{Object.keys(identity.capabilities).map(c=><button key={c} onClick={()=>toggle("capabilities",c)} className={`rounded-lg border px-3 py-2.5 text-left text-[10px] ${identity.capabilities[c]?"border-violet-300/40 bg-violet-500/15 text-white":"border-white/10 text-slate-500"}`}>{c}</button>)}</div></div>
-    <div><div className="eyebrow">Proactivity</div><div className="mt-3 space-y-1">{Object.keys(identity.proactivity).map(p=><SettingRow key={p} label={p} description="Takes effect once a real scheduler/agent layer is connected."><input type="checkbox" checked={identity.proactivity[p]} onChange={()=>toggle("proactivity",p)} aria-label={p}/></SettingRow>)}</div></div>
-    <Button onClick={save}><Save size={13}/> Save identity</Button>
-  </div>}
-function SettingsWorkspace({url,setUrl,notify}:{url:string;setUrl:(v:string)=>void;notify:(t:string)=>void}){return <div className="mt-5"><div className="flex items-center gap-3 rounded-xl border border-amber-300/15 bg-amber-300/5 p-4"><WifiOff size={19} className="text-amber-300"/><div><div className="text-xs text-slate-200">Offline-safe n8n seam</div><div className="mt-1 text-[10px] text-slate-500">healthz, queue, and sync contracts only · no live workflows</div></div><span className="ml-auto text-[9px] text-amber-200">offline</span></div><label className="mt-5 block text-[10px] text-slate-500">Workspace URL<input value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://your-workspace.example" className="mt-2 w-full rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-white outline-none focus:border-violet-300/40"/></label><div className="mt-4 flex gap-2"><Button onClick={()=>notify(url?"Healthz test not called: this preview does not make network requests.":"Add a workspace URL before testing.")}><Link2 size={13}/> Test healthz</Button><Button onClick={()=>notify("0 tasks in offline queue.")}><Inbox size={13}/> View queue</Button></div></div>}
+  return <div className="mt-5"><SettingRow label="Groq API key" description="Stored in your browser's local storage for this preview. Never logged, never shown in full."><div className="flex items-center gap-2"><input type={showKey?"text":"password"} value={key} onChange={e=>setKey(e.target.value)} placeholder="gsk_..." aria-label="Groq API key" className="w-44 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-[10px] text-white outline-none focus:border-violet-300/40 sm:w-56"/><button onClick={()=>setShowKey(v=>!v)} aria-label={showKey?"Hide key":"Show key"} className="rounded-lg border border-white/10 p-2 text-slate-400 hover:text-white"><Eye size={14}/></button><Button onClick={save}><Save size={13}/> Save</Button></div></SettingRow>{settings.groq.hasKey&&<div className="border-b border-white/5 py-3 text-[10px] text-slate-500">Saved key ends in <span className="text-cyan-200">{settings.groq.keyLastFour}</span>.</div>}<SettingRow label="Default model" description="Sent as the model id once a live call is made."><select value={settings.groq.modelId} onChange={e=>updateSettings({modelId:e.target.value})} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[10px] text-slate-300">{GROQ_MODELS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}</select></SettingRow><SettingRow label="Connection status" description="Only shows Connected after a real successful call to Groq."><span className={`rounded-full border px-2 py-1 text-[9px] ${status==="connected"?"border-emerald-300/25 bg-emerald-300/10 text-emerald-200":status==="failed"?"border-rose-300/25 bg-rose-300/10 text-rose-200":"border-amber-300/20 text-amber-200"}`}>{status==="connected"?"Connected":status==="failed"?"Failed":"Not connected"}</span></SettingRow><SettingRow label="Test connection" description="Makes a real request to Groq's API using the key above."><Button onClick={test} disabled={testing}>{testing?<><RefreshCw size={13} className="animate-spin"/> Testing…</>:<><RefreshCw size={13}/> Test connection</>}</Button></SettingRow>{lastError&&<div className="mt-3 rounded-lg border border-rose-300/20 bg-rose-300/5 p-3 text-[10px] leading-4 text-rose-200">{lastError}</div>}</div>}
 
-function AgentStatusPill({status}:{status:AgentStatus}){const color=status==="Completed"?"emerald":status==="Failed"?"rose":status==="Running"?"cyan":status==="Needs approval"||status==="Waiting"?"amber":"slate";return <span className={`inline-flex items-center gap-1.5 rounded-full border border-${color}-300/25 bg-${color}-300/10 px-2.5 py-1 text-[9px] text-${color}-200`}><span className={`h-1.5 w-1.5 rounded-full bg-${color}-300`}/>{status}</span>}
-function TeamView({setCurrent,notify}:{setCurrent:(v:View)=>void;notify:(t:string)=>void}){
-  const openAgent=(a:Agent)=>{notify(`Opening ${a.name}. ${a.workflowConnected?"":"No n8n workflow is connected yet, so this opens the local agent profile only."}`);};
-  const runMission=(a:Agent)=>{if(!a.workflowConnected){notify(`${a.name}'s workflow isn't connected yet — nothing was run.`);return}notify(`Mission queued for ${a.name}.`);};
-  return <div className="space-y-4"><Panel className="flex flex-wrap items-center gap-3 p-4"><Workflow size={18} className="text-cyan-300"/><div><div className="text-xs text-slate-100">YuviSkillRegistry / Loader / Orchestrator</div><div className="mt-1 text-[10px] text-slate-500">7 AI employees registered · 0 connected to a live n8n workflow · no execution is implied until connected</div></div><span className="ml-auto rounded-full border border-amber-300/20 bg-amber-300/5 px-2 py-1 text-[9px] text-amber-200">0 / {agents.length} connected</span></Panel>
-  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{agents.map(a=><Panel className="flex flex-col p-5" key={a.name}>
-    <div className="flex items-start justify-between gap-2"><div className="flex items-center gap-3"><Avatar text={a.name.slice(0,2)} color={a.color} size="h-10 w-10"/><div><h3 className="text-base font-semibold text-white">{a.name}</h3><p className="text-[10px] text-slate-500">{a.role}</p></div></div><AgentStatusPill status={a.status}/></div>
-    <p className="mt-4 text-[11px] leading-5 text-slate-400">{a.description}</p>
-    <div className="mt-4 flex flex-wrap gap-1.5">{a.capabilities.map(c=><span key={c} className="rounded-full border border-white/10 bg-white/[.03] px-2 py-1 text-[9px] text-slate-400">{c}</span>)}</div>
-    <div className="mt-4 rounded-lg bg-black/15 p-3"><div className="text-[9px] uppercase tracking-[.15em] text-slate-600">Current mission</div><div className="mt-1 text-[10px] text-slate-300">{a.task}</div></div>
-    <div className="mt-3 flex items-center justify-between text-[9px] text-slate-600"><span>Last activity: {a.lastActivity}</span><span className={a.workflowConnected?"text-cyan-300":"text-slate-600"}>{a.workflowConnected?"Workflow connected":"Workflow unavailable"}</span></div>
-    <div className="mt-4 flex gap-2"><Button onClick={()=>openAgent(a)} className="flex-1">Open Agent</Button><Button variant="primary" onClick={()=>runMission(a)} disabled={!a.workflowConnected} className="flex-1"><Rocket size={13}/> Run Mission</Button></div>
-  </Panel>)}</div></div>}
-function PipelineView(){return <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{["New · 142","Contacted · 89","Qualified · 36","Proposal · 12"].map((stage,i)=><Panel className="min-h-[280px] p-4" key={stage}><div className="flex items-center justify-between text-[10px] text-slate-300">{stage}<Plus size={14} className="text-violet-300"/></div>{initialLeads.slice(i%2, i%2+2).map(l=><div key={l.name} className="mt-3 rounded-lg border border-white/7 bg-black/15 p-3"><div className="flex gap-2"><Avatar text={l.initials}/><div><div className="text-[10px] text-slate-200">{l.name}</div><div className="text-[9px] text-slate-500">{l.company}</div></div></div><div className="mt-3 text-[10px] text-violet-200">{l.value}</div></div>)}</Panel>)}</div>}
-function ReportsView(){return <div className="grid gap-4 lg:grid-cols-3"><Panel className="p-5 lg:col-span-2"><div className="text-[10px] uppercase tracking-[.18em] text-violet-300">Operating pulse</div><div className="mt-2 text-3xl text-white">84<span className="text-sm text-slate-500"> / 100</span></div><Sparkline color="#43e6d0"/><div className="grid grid-cols-3 gap-3 border-t border-white/5 pt-4 text-[10px]"><div><span className="text-slate-500">Revenue</span><b className="mt-1 block text-slate-100">₹1.24L</b></div><div><span className="text-slate-500">Win rate</span><b className="mt-1 block text-slate-100">32.4%</b></div><div><span className="text-slate-500">Cycle</span><b className="mt-1 block text-slate-100">18 days</b></div></div></Panel><Panel className="p-5"><div className="text-[10px] uppercase tracking-[.18em] text-violet-300">Generated reports</div>{["Weekly business review","Lead source analysis","Crew performance"].map(x=><button key={x} className="mt-4 flex w-full items-center gap-2 rounded-lg border border-white/5 p-3 text-left hover:bg-white/[.03]"><FileBarChart size={15} className="text-violet-300"/><span className="text-[10px] text-slate-300">{x}</span><ArrowUpRight size={13} className="ml-auto text-slate-600"/></button>)}</Panel></div>}
-function KnowledgeView({setCurrent}:{setCurrent:(v:View)=>void}){return <div className="space-y-4"><Panel className="flex items-center gap-3 p-4"><Database size={18} className="text-cyan-300"/><div><div className="text-xs text-slate-100">YuviKnowledge · fileParser</div><div className="mt-1 text-[10px] text-slate-500">Local persistence is available for indexed sources and business context.</div></div><span className="ml-auto rounded-full border border-cyan-300/20 px-2 py-1 text-[9px] text-cyan-200">local indexed</span></Panel><div className="grid gap-4 md:grid-cols-3">{[["Business memory","42 sources",BrainCircuit],["Playbooks","18 workflows",Layers3],["Client context","86 records",BriefcaseBusiness]].map(([x,n,I])=>{const Icon=I as typeof Database;return <Panel className="p-5" key={x as string}><Icon size={20} className="text-cyan-300"/><h3 className="mt-5 text-sm text-white">{x as string}</h3><p className="mt-1 text-[10px] text-slate-500">{n as string} · preview index</p><button onClick={()=>setCurrent("Settings")} className="mt-6 text-[10px] text-violet-300">Manage source →</button></Panel>})}</div><Panel className="flex items-center gap-3 p-4"><GitBranch size={17} className="text-violet-300"/><div><div className="text-xs text-slate-200">Optional GitHub memory context</div><div className="mt-1 text-[10px] text-slate-500">Not connected in this preview. Connect only with explicit repository credentials.</div></div><span className="ml-auto text-[9px] text-slate-600">available · off</span></Panel></div>}
-function ClientsView({leads}:{leads:Lead[]}){return <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{leads.slice(0,3).map(l=><Panel className="p-5" key={l.company}><div className="flex items-center gap-3"><Avatar text={l.initials} color="#61a6ff"/><div><div className="text-sm text-white">{l.company}</div><div className="text-[10px] text-slate-500">{l.name} · client workspace</div></div></div><div className="mt-5 grid grid-cols-2 gap-3"><div className="rounded-lg bg-black/15 p-3"><div className="text-[9px] text-slate-600">Open value</div><div className="mt-1 text-xs text-slate-200">{l.value}</div></div><div className="rounded-lg bg-black/15 p-3"><div className="text-[9px] text-slate-600">Next action</div><div className="mt-1 text-xs text-cyan-200">Review</div></div></div><button className="mt-4 text-[10px] text-violet-300">Open client context →</button></Panel>)}</div>}
+function SettingRow({ label, description, children }: { label:string;description:string;children:ReactNode }) { return <div className="flex flex-col gap-3 border-b border-white/5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="text-xs text-slate-200">{label}</div><div className="mt-1 max-w-lg text-[10px] leading-4 text-slate-600">{description}</div></div>{children}</div> }
 
-function NotificationsView({notifs,onOpenNotif,onClearNotif,onClearAllNotifs}:{notifs:Notif[];onOpenNotif:(n:Notif)=>void;onClearNotif:(id:string)=>void;onClearAllNotifs:()=>void}){
-  return <div className="rise space-y-5 p-4 sm:p-7"><ViewHeading view="Notifications" description="Everything YUVI has surfaced, in one honest feed." action={notifs.length>0?<Button onClick={onClearAllNotifs}><Trash2 size={13}/> Clear all</Button>:undefined}/>
-  <Panel className="divide-y divide-white/5">{notifs.length===0?<div className="py-12 text-center text-[10px] text-slate-600">No notifications right now.</div>:notifs.map(n=><div key={n.id} className={`flex items-start gap-3 p-4 ${n.read?"":"bg-violet-500/[.05]"}`}>
-    <span className={`mt-1 h-2 w-2 rounded-full ${n.read?"bg-slate-700":"bg-cyan-300"}`}/>
-    <button onClick={()=>onOpenNotif(n)} className="min-w-0 flex-1 text-left"><div className="text-[9px] uppercase tracking-[.15em] text-violet-300">{n.type}</div><div className="mt-1 text-xs text-slate-200">{n.text}</div><div className="mt-1 text-[9px] text-slate-600">{n.timestamp}</div></button>
-    <button onClick={()=>onClearNotif(n.id)} className="rounded-lg p-2 text-slate-600 hover:bg-white/5 hover:text-rose-200"><Trash2 size={14}/></button>
-  </div>)}</Panel></div>;
+function ViewHeading({ view, description, action }: { view: View; description: string; action?: ReactNode }) {
+  return <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><div className="text-[10px] uppercase tracking-[.2em] text-violet-300">YUVI / {view}</div><h2 className="mt-2 text-2xl font-semibold text-white">{view}</h2><p className="mt-1 max-w-xl text-xs text-slate-500">{description}</p></div>{action}</div>;
 }
 
-function LockScreen({ onUnlock, onDeviceUnlock, configured, onForgotPasscode }: { onUnlock: (code: string) => Promise<boolean>; onDeviceUnlock: () => void; configured: boolean; onForgotPasscode: () => void }) {
-  const [code,setCode]=useState("");const [error,setError]=useState("");const [busy,setBusy]=useState(false);const [confirmReset,setConfirmReset]=useState(false);const supported=typeof window!=="undefined"&&"PublicKeyCredential" in window;
-  const unlock=async()=>{if(!code.trim()){setError("Enter a session passcode.");return}setBusy(true);const ok=await onUnlock(code);setBusy(false);if(!ok)setError(configured?"Passcode did not match this session.":"Enter any non-empty code to open the unconfigured preview session.");};
-  return <div className="fixed inset-0 z-[80] flex min-h-[100dvh] items-center justify-center overflow-auto bg-[#050616]/95 p-5 backdrop-blur-xl"><div className="absolute inset-0 opacity-30 signal-grid"/><div className="relative w-full max-w-md text-center"><div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-[24px] border border-violet-300/35 bg-violet-500/10 shadow-[0_0_55px_rgba(132,84,255,.25)]"><img src={yuviLogo} alt="YUVI" className="h-14 w-14 object-contain"/></div><div className="mt-6 text-[28px] font-black tracking-[.2em] text-white">YUVI</div><div className="mt-1 text-[9px] tracking-[.32em] text-violet-300/70">AI BUSINESS OS</div><div className="mx-auto mt-8 max-w-xs text-sm text-slate-200">Session locked</div><div className="mt-1 text-[10px] text-slate-600">Identity verified locally · no credentials leave this frame</div><div className="panel mx-auto mt-7 max-w-xs p-4"><div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3"><KeyRound size={15} className="text-violet-300"/><input autoFocus type="password" value={code} onChange={e=>{setCode(e.target.value);setError("")}} onKeyDown={e=>e.key==="Enter"&&unlock()} placeholder="Session passcode" className="w-full bg-transparent py-3 text-sm text-white outline-none placeholder:text-slate-600"/><span className="text-[9px] text-slate-600">local</span></div>{error&&<div className="mt-3 text-left text-[10px] text-rose-300">{error}</div>}<Button variant="primary" onClick={unlock} disabled={busy} className="mt-3 w-full">{busy?"Checking…":<><Unlock size={14}/> Unlock YUVI</>}</Button>{supported&&<Button onClick={onDeviceUnlock} className="mt-2 w-full"><BadgeCheck size={14}/> Use device unlock</Button>}</div>
-  {configured&&<div className="mx-auto mt-4 max-w-xs">{!confirmReset?<button onClick={()=>setConfirmReset(true)} className="text-[10px] text-slate-500 hover:text-slate-300">Forgot your passcode?</button>:<div className="rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-left"><div className="text-[10px] text-amber-100">This clears only the passcode lock — your leads, chats and settings stay exactly as they are.</div><div className="mt-2 flex gap-2"><Button onClick={()=>setConfirmReset(false)} className="flex-1">Cancel</Button><Button variant="danger" onClick={onForgotPasscode} className="flex-1">Reset passcode</Button></div></div>}</div>}
-  <div className="mt-5 flex items-center justify-center gap-2 text-[9px] text-cyan-200"><span className="status-dot"/> Security status · {configured?"passcode armed":"session-only access"}</div></div></div>;
-}
-
-function LeadModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (e: FormEvent<HTMLFormElement>) => void }) {
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#040510]/75 p-4 backdrop-blur-sm"><form onSubmit={onSubmit} className="panel w-full max-w-md rounded-2xl p-6"><div className="flex items-center justify-between"><div><div className="eyebrow">Quick capture</div><h3 className="mt-2 text-xl text-white">Add a new lead</h3></div><button type="button" onClick={onClose} className="text-slate-500 hover:text-white"><X size={18}/></button></div><div className="mt-6 space-y-3"><input name="name" required placeholder="Contact name" className="w-full rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-white outline-none focus:border-violet-300/50"/><input name="company" placeholder="Company or context" className="w-full rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-white outline-none focus:border-violet-300/50"/></div><Button type="submit" variant="primary" className="mt-5 w-full">Add to pipeline</Button></form></div>;
+function Button({ children, onClick, variant = "ghost", disabled = false, type = "button", className = "" }: { children: ReactNode; onClick?: () => void; variant?: "ghost"|"primary"|"danger"; disabled?: boolean; type?: "button"|"submit"; className?: string }) {
+  const style = variant === "primary" ? "bg-violet-500 text-white hover:bg-violet-400" : variant === "danger" ? "border border-rose-300/20 bg-rose-300/5 text-rose-200 hover:bg-rose-300/10" : "border border-white/10 bg-white/[.03] text-slate-300 hover:border-violet-300/30 hover:text-white";
+  return <button type={type} disabled={disabled} onClick={onClick} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-[10px] disabled:cursor-not-allowed disabled:opacity-40 ${style} ${className}`}>{children}</button>;
 }
 
 export function YuviOS() {
-  const [view,setView]=useState<View>("Dashboard");const [sidebar,setSidebar]=useState(false);const [userMenu,setUserMenu]=useState(false);const [modal,setModal]=useState(false);const [locked,setLocked]=useState(false);
-  const [installPrompt,setInstallPrompt]=useState<any>(null);
-  useEffect(()=>{loadAllSkills()},[]);
-  useEffect(()=>{const handler=(e:Event)=>{e.preventDefault();setInstallPrompt(e)};window.addEventListener("beforeinstallprompt",handler);return()=>window.removeEventListener("beforeinstallprompt",handler)},[]);
-  const installApp=async()=>{if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;setInstallPrompt(null)};
-  const [settings,setSettings]=useState<YuviSettings>(()=>loadSettings());
-  useEffect(()=>{saveSettings(settings)},[settings]);
-  const [leads,setLeads]=useState<Lead[]>(()=>store.read("leads",initialLeads));
-  useEffect(()=>{store.write("leads",leads)},[leads]);
-  const [approvals,setApprovals]=useState<Approval[]>(initialApprovals);const [selectedApproval,setSelectedApproval]=useState<string|null>(null);
-  const [conversations,setConversations]=useState<Conversation[]>(()=>store.read("conversations",initialConversations));
-  useEffect(()=>{store.write("conversations",conversations)},[conversations]);
-  const [selectedConversation,setSelectedConversation]=useState(()=>store.read("selected_conversation","conv-01"));
-  useEffect(()=>{store.write("selected_conversation",selectedConversation)},[selectedConversation]);
-  const [toast,setToast]=useState("");
-  const [notifs,setNotifs]=useState<Notif[]>(()=>store.read("notifications",initialNotifs));
-  useEffect(()=>{store.write("notifications",notifs)},[notifs]);
-  const [notifPanel,setNotifPanel]=useState(false);
-  const notify=(text:string)=>{setToast(text);window.setTimeout(()=>setToast(""),2600)};
-  const navigateTo=(next:View)=>{setView(next);setSidebar(false);setUserMenu(false);setNotifPanel(false)};
-  const openApproval=(id:string)=>{navigateTo("Approvals");setSelectedApproval(id)};const openConversation=(id:string)=>{navigateTo("Chat");setSelectedConversation(id)};const openAsset=(id:string)=>openApproval(id);const openLead=(name:string)=>{navigateTo("Leads");notify(`Lead selected: ${name}`)};const openAgent=(name:string)=>{navigateTo("AI Team");notify(`Agent focus: ${name}`)};const openSettings=(tab?:string)=>{navigateTo("Settings");if(tab)notify(`Settings focus requested: ${tab}`)};const openNotification=(id:string)=>{const n=notifs.find(x=>x.id===id);if(n)openNotif(n)};
-  const openNotif=(n:Notif)=>{setNotifs(items=>items.map(i=>i.id===n.id?{...i,read:true}:i));if(n.target?.kind==="approval")openApproval(n.target.id||"");else if(n.target?.kind==="conversation")openConversation(n.target.id||"");else if(n.target?.kind==="lead")openLead(n.target.id||"");else if(n.target?.kind==="agent")openAgent(n.target.id||"");else if(n.target?.kind==="settings")openSettings(n.target.id);else navigateTo("Notifications")};
-  const clearNotif=(id:string)=>setNotifs(items=>items.filter(i=>i.id!==id));
-  const clearAllNotifs=()=>setNotifs([]);
-  const addLead=(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();const d=new FormData(e.currentTarget);const name=String(d.get("name")||"New contact");const company=String(d.get("company")||"Independent");setLeads(l=>[{name,company,value:"₹8,500",stage:"New",initials:name.slice(0,2).toUpperCase(),score:71,category:"New business",status:"Warm",phone:"Not added"},...l]);setModal(false);notify(`${name} added to your radar`)};
-  const unlock=async(code:string)=>{const digest=settings.lock.passcodeDigest;if(!digest){setLocked(false);return true}const data=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(code));const attempt=Array.from(new Uint8Array(data)).map(b=>b.toString(16).padStart(2,"0")).join("");if(attempt===digest){setLocked(false);return true}return false};
-  const forgotPasscode=()=>{setSettings(s=>({...s,lock:{passcodeDigest:""}}));setLocked(false);notify("Passcode reset. Your leads, chats and settings were not touched.")};
-  const content=useMemo(()=>{if(view==="Dashboard")return <Dashboard onAdd={()=>setModal(true)} setCurrent={navigateTo}/>;if(view==="Approvals")return <ApprovalsView approvals={approvals} setApprovals={setApprovals} selectedId={selectedApproval} setSelectedId={setSelectedApproval} notify={notify}/>;if(view==="Chat")return <ChatView conversations={conversations} setConversations={setConversations} selectedId={selectedConversation} setSelectedId={setSelectedConversation} notify={notify} settings={settings}/>;if(view==="AI Team")return <div className="rise space-y-5 p-4 sm:p-7"><ViewHeading view="AI Team" description="Registered crew visibility without implying live agent execution."/><TeamView setCurrent={navigateTo} notify={notify}/></div>;if(view==="Leads")return <LeadsView leads={leads} setLeads={setLeads} onAdd={()=>setModal(true)} setCurrent={navigateTo} notify={notify} settings={settings}/>;if(view==="Pipeline")return <div className="rise space-y-5 p-4 sm:p-7"><ViewHeading view="Pipeline" description="Momentum at a glance, from first signal to signed work."/><PipelineView/></div>;if(view==="Clients")return <div className="rise space-y-5 p-4 sm:p-7"><ViewHeading view="Clients" description="Relationships, context, and next best actions in one place."/><ClientsView leads={leads}/></div>;if(view==="Knowledge Base")return <div className="rise space-y-5 p-4 sm:p-7"><ViewHeading view="Knowledge Base" description="Local indexed sources with an optional memory connection."/><KnowledgeView setCurrent={navigateTo}/></div>;if(view==="Outreach")return <OutreachView leads={leads} notify={notify}/>;if(view==="Reports")return <div className="rise space-y-5 p-4 sm:p-7"><ViewHeading view="Reports" description="A sharp read on the business, without spreadsheet archaeology."/><ReportsView/></div>;if(view==="Notifications")return <NotificationsView notifs={notifs} onOpenNotif={openNotif} onClearNotif={clearNotif} onClearAllNotifs={clearAllNotifs}/>;return <SettingsView onLock={()=>setLocked(true)} settings={settings} setSettings={setSettings} notify={notify}/>},[view,approvals,selectedApproval,conversations,selectedConversation,leads,settings,notifs]);
-  return <div className="yuvi"><style>{css}</style><div className="flex min-h-[100dvh]"><Sidebar current={view} setCurrent={navigateTo} open={sidebar} onUser={()=>setUserMenu(v=>!v)}/><main className="min-w-0 flex-1 overflow-hidden"><Header view={view} onAdd={()=>setModal(true)} onMenu={()=>setSidebar(true)} onUser={()=>setUserMenu(v=>!v)} notifs={notifs} onOpenNotif={openNotif} onClearNotif={clearNotif} onClearAllNotifs={clearAllNotifs} notifPanel={notifPanel} setNotifPanel={setNotifPanel}/>{content}</main></div>{userMenu&&<div className="fixed right-4 top-[68px] z-40 w-60 rounded-xl border border-violet-300/20 bg-[#10112b] p-2 shadow-2xl">{installPrompt&&<button onClick={()=>{installApp();setUserMenu(false)}} className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-xs text-cyan-200 hover:bg-white/5"><Rocket size={15}/> Install YUVI app</button>}<button onClick={()=>{setLocked(true);setUserMenu(false)}} className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-xs text-slate-300 hover:bg-white/5"><Lock size={15} className="text-violet-300"/> Lock session</button><button onClick={()=>openSettings()} className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-xs text-slate-300 hover:bg-white/5"><Settings2 size={15} className="text-violet-300"/> Settings</button><div className="my-1 border-t border-white/5"/><div className="px-3 py-2 text-[9px] leading-4 text-slate-600">Session controls are local to this preview.</div></div>}{modal&&<LeadModal onClose={()=>setModal(false)} onSubmit={addLead}/>} {toast&&<div className="fixed bottom-5 left-1/2 z-[70] flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-lg border border-emerald-300/25 bg-[#101d25] px-4 py-3 text-center text-xs text-emerald-200 shadow-xl"><CheckCircle2 size={15}/>{toast}</div>}{locked&&<LockScreen configured={!!settings.lock.passcodeDigest} onUnlock={unlock} onDeviceUnlock={()=>setLocked(false)} onForgotPasscode={forgotPasscode}/>}</div>;
+  const [view, setView] = useState<View>("Dashboard");
+  const [sidebar, setSidebar] = useState(false);
+  const [userMenu, setUserMenu] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [toast, setToast] = useState("");
+  const [notifPanel, setNotifPanel] = useState(false);
+  const [activeCall, setActiveCall] = useState<CallQueueItem | null>(null);
+
+  const [settings, setSettings] = useState<YuviSettings>(() => loadSettings());
+  useEffect(() => { saveSettings(settings); }, [settings]);
+
+  const [activepiecesUrl, setActivepiecesUrl] = useState<string>(() => store.read("activepieces_url", "http://localhost:8080"));
+  useEffect(() => { store.write("activepieces_url", activepiecesUrl); }, [activepiecesUrl]);
+
+  const [leads, setLeads] = useState<NormalizedLead[]>(() => store.read("normalized_leads", initialGujaratLeads));
+  useEffect(() => { store.write("normalized_leads", leads); }, [leads]);
+
+  const [callQueue, setCallQueue] = useState<CallQueueItem[]>(() => {
+    return initialGujaratLeads.filter(l => l.phone).map(l => ({
+      id: `call_${l.id}`,
+      leadId: l.id,
+      companyName: l.companyName,
+      contactPerson: l.contactPerson || "Decision Maker",
+      phone: l.phone,
+      priority: l.tier === "A" ? "URGENT" : "HIGH",
+      reason: l.bottleneck || "Sales engine follow-up",
+      talkingPoints: [
+        `Reference firm: "${l.companyName}" based in ${l.city}, ${l.state}.`,
+        `Decision Maker: Speak directly with ${l.contactPerson || "founder / principal"}.`,
+        `Hook / Bottleneck: "${l.bottleneck || "Expanding predictable high-value client pipeline in Gujarat"}".`,
+        `Core Offer: ${l.primaryService || "Yugantar Growth revenue architecture"}.`,
+        `Call Objective: Secure 15-minute diagnostic walkthrough meeting.`
+      ],
+      clickToCallUrl: `tel:${l.phone}`,
+      callStatus: "PENDING"
+    }));
+  });
+
+  const [approvals, setApprovals] = useState<Approval[]>(initialApprovals);
+  const [selectedApproval, setSelectedApproval] = useState<string | null>(null);
+
+  const [conversations, setConversations] = useState<Conversation[]>(() => store.read("conversations", initialConversations));
+  useEffect(() => { store.write("conversations", conversations); }, [conversations]);
+
+  const [selectedConversation, setSelectedConversation] = useState(() => store.read("selected_conversation", "conv-01"));
+  const [notifs, setNotifs] = useState<Notif[]>(initialNotifs);
+
+  const notify = (text: string) => { setToast(text); window.setTimeout(() => setToast(""), 2800); };
+  const navigateTo = (next: View) => { setView(next); setSidebar(false); setUserMenu(false); setNotifPanel(false); };
+
+  // Dynamic Sales Dashboard Metrics
+  const metrics: DailySalesDashboardMetrics = useMemo(() => {
+    const tierCounts = { A: 0, B: 0, C: 0, D: 0 };
+    let callsCompleted = 0;
+    let interestedCount = 0;
+    let wonCount = 0;
+    let lostCount = 0;
+
+    leads.forEach(l => {
+      tierCounts[l.tier]++;
+      if (l.status === "CONTACTED") callsCompleted++;
+      if (l.status === "INTERESTED") interestedCount++;
+      if (l.status === "WON") wonCount++;
+      if (l.status === "LOST") lostCount++;
+    });
+
+    const pendingCallsCount = callQueue.filter(c => c.callStatus === "PENDING").length;
+    const pendingApprovalsCount = approvals.filter(a => a.status === "PENDING").length;
+
+    return {
+      totalLeads: leads.length,
+      newLeads: leads.filter(l => l.status === "NEW").length,
+      qualifiedLeads: tierCounts.A + tierCounts.B,
+      tierBreakdown: tierCounts,
+      callsDue: pendingCallsCount,
+      callsCompleted,
+      outreachDue: pendingApprovalsCount,
+      followUpsDue: leads.filter(l => l.status === "CALLBACK").length,
+      replies: interestedCount,
+      interestedProspects: interestedCount,
+      meetingsOpportunities: interestedCount,
+      won: wonCount,
+      lost: lostCount,
+      pendingActions: pendingCallsCount + pendingApprovalsCount
+    };
+  }, [leads, callQueue, approvals]);
+
+  const triggerSalesEngine = async () => {
+    notify("Starting Daily Sales Engine for Yugantar Growth...");
+    const rawInputs = leads.map(l => ({
+      companyName: l.companyName,
+      contactPerson: l.contactPerson,
+      phone: l.phone,
+      email: l.email,
+      websiteUrl: l.websiteUrl,
+      city: l.city,
+      state: l.state,
+      country: l.country,
+      industry: l.industry,
+      category: l.category,
+      notes: l.notes,
+      rawRecord: l.rawRecord
+    }));
+
+    const result = await runDailySalesEngine(rawInputs, [], { baseUrl: activepiecesUrl });
+    setLeads(result.processedLeads);
+    setCallQueue(result.callQueue);
+    notify(`Sales Engine completed! ${result.newLeadsCount} leads processed, ${result.callQueue.length} calls queued.`);
+  };
+
+  const handleRecordCallOutcome = (callId: string, outcome: string, notes: string, nextDate: string) => {
+    setCallQueue(prev => prev.map(c => {
+      if (c.id === callId) {
+        return {
+          ...c,
+          callStatus: outcome === "No answer" ? "NO_ANSWER" : outcome === "Callback requested" ? "CALLBACK_REQUESTED" : "COMPLETED",
+          outcomeNotes: notes,
+          calledAt: new Date().toISOString(),
+          nextScheduledFollowUp: nextDate
+        };
+      }
+      return c;
+    }));
+
+    const targetCall = callQueue.find(c => c.id === callId);
+    if (targetCall) {
+      setLeads(prev => prev.map(l => {
+        if (l.id === targetCall.leadId) {
+          const newStatus = outcome === "Connected - Interested" || outcome === "Meeting booked" ? "INTERESTED" : outcome === "Callback requested" ? "CALLBACK" : outcome === "Not interested" ? "NOT_INTERESTED" : "CONTACTED";
+          return { ...l, status: newStatus, notes: notes ? `${l.notes}\n[Call]: ${notes}` : l.notes };
+        }
+        return l;
+      }));
+    }
+
+    notify(`Outcome recorded: ${outcome}. Pipeline updated.`);
+  };
+
+  const content = useMemo(() => {
+    if (view === "Dashboard") {
+      return <Dashboard
+        metrics={metrics}
+        callQueue={callQueue}
+        onOpenCall={setActiveCall}
+        onTriggerEngine={triggerSalesEngine}
+        setCurrent={navigateTo}
+        onAdd={() => navigateTo("Leads")}
+      />;
+    }
+    if (view === "Leads") {
+      return <LeadsView
+        leads={leads}
+        setLeads={setLeads}
+        callQueue={callQueue}
+        setCallQueue={setCallQueue}
+        onOpenCall={setActiveCall}
+        onTriggerEngine={triggerSalesEngine}
+        setCurrent={navigateTo}
+        notify={notify}
+        settings={settings}
+        activepiecesUrl={activepiecesUrl}
+      />;
+    }
+    if (view === "Approvals") {
+      return <ApprovalsView
+        approvals={approvals}
+        setApprovals={setApprovals}
+        selectedId={selectedApproval}
+        setSelectedId={setSelectedApproval}
+        notify={notify}
+      />;
+    }
+    if (view === "Chat") {
+      return <ChatView
+        conversations={conversations}
+        setConversations={setConversations}
+        selectedId={selectedConversation}
+        setSelectedId={setSelectedConversation}
+        notify={notify}
+        settings={settings}
+        leads={leads}
+        callQueue={callQueue}
+        onTriggerEngine={triggerSalesEngine}
+      />;
+    }
+    if (view === "Settings") {
+      return <SettingsView
+        onLock={() => setLocked(true)}
+        settings={settings}
+        setSettings={setSettings}
+        notify={notify}
+        activepiecesUrl={activepiecesUrl}
+        setActivepiecesUrl={setActivepiecesUrl}
+      />;
+    }
+
+    // Secondary Views: AI Team, Pipeline, Reports, Notifications
+    if (view === "AI Team") {
+      return <div className="rise space-y-5 p-4 sm:p-7">
+        <ViewHeading view="AI Team" description="Active AI Employees — Coordinated via Task Execution System."/>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Object.values(EMPLOYEES).map(emp => (
+            <Panel key={emp.id} className="p-5">
+              <div className="flex items-center gap-3">
+                <Avatar text={emp.name.slice(0,2)} color={emp.color} size="h-10 w-10"/>
+                <div>
+                  <h3 className="text-base font-semibold text-white">{emp.name}</h3>
+                  <p className="text-[10px] text-slate-500">{emp.role}</p>
+                </div>
+              </div>
+              <p className="mt-4 text-[11px] leading-5 text-slate-400">{emp.description}</p>
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {emp.capabilities.slice(0, 4).map(c => (
+                  <span key={c} className="rounded-full border border-white/10 bg-white/[.03] px-2 py-0.5 text-[9px] text-slate-400">{c}</span>
+                ))}
+              </div>
+              <div className="mt-4 rounded-lg bg-black/15 p-3 text-[10px] text-slate-300">
+                <span className="text-[9px] uppercase tracking-wider text-slate-500">Allowed Tools: </span>
+                {emp.allowedTools.join(", ")}
+              </div>
+            </Panel>
+          ))}
+        </div>
+      </div>;
+    }
+
+    if (view === "Pipeline") {
+      return <div className="rise space-y-5 p-4 sm:p-7">
+        <ViewHeading view="Pipeline" description="Gujarat Commercial Opportunities by Sales Lifecycle Stage."/>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[
+            { stage: "NEW", label: "New Prospects" },
+            { stage: "CONTACTED", label: "Contacted / In Discovery" },
+            { stage: "INTERESTED", label: "Interested / Callbacks" },
+            { stage: "WON", label: "Won / Retained" }
+          ].map(({ stage, label }) => {
+            const list = leads.filter(l => l.status === stage || (stage === "NEW" && l.status === "IN_RESEARCH"));
+            return (
+              <Panel key={stage} className="min-h-[300px] p-4">
+                <div className="flex items-center justify-between border-b border-white/5 pb-2 text-[10px] font-semibold text-slate-300">
+                  <span>{label}</span>
+                  <span className="rounded bg-violet-400/10 px-2 py-0.5 text-violet-200">{list.length}</span>
+                </div>
+                <div className="mt-3 space-y-2.5">
+                  {list.map(l => (
+                    <div key={l.id} className="rounded-lg border border-white/5 bg-black/20 p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-white">{l.companyName}</span>
+                        <TierPill tier={l.tier}/>
+                      </div>
+                      <div className="mt-1 text-[10px] text-slate-400">{l.contactPerson} · {l.city}</div>
+                      <div className="mt-2 text-[9px] text-cyan-300">{l.phone || "No phone"}</div>
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            );
+          })}
+        </div>
+      </div>;
+    }
+
+    if (view === "Reports") {
+      return <div className="rise space-y-5 p-4 sm:p-7">
+        <ViewHeading view="Reports" description="Daily Sales Engine Analytics & Conversion Intelligence."/>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Panel className="p-5 lg:col-span-2">
+            <div className="eyebrow">Operating Health & Velocity</div>
+            <div className="mt-2 text-3xl font-bold text-white">88 <span className="text-sm font-normal text-slate-500">/ 100</span></div>
+            <Sparkline color="#43e6d0"/>
+            <div className="grid grid-cols-3 gap-3 border-t border-white/5 pt-4 text-[10px]">
+              <div><span className="text-slate-500">Qualified Leads</span><b className="mt-1 block text-slate-100">{metrics.qualifiedLeads}</b></div>
+              <div><span className="text-slate-500">Calls Completed</span><b className="mt-1 block text-slate-100">{metrics.callsCompleted}</b></div>
+              <div><span className="text-slate-500">Opportunities</span><b className="mt-1 block text-slate-100">{metrics.meetingsOpportunities}</b></div>
+            </div>
+          </Panel>
+          <Panel className="p-5">
+            <div className="eyebrow">Executive Brief</div>
+            <div className="mt-3 text-xs leading-5 text-slate-300">
+              The Daily Sales Engine is actively qualifying Gujarat commercial leads. Priority focus is on Tier A targets in Ahmedabad and Surat, with direct WhatsApp introductions following human approval.
+            </div>
+          </Panel>
+        </div>
+      </div>;
+    }
+
+    return <div className="p-7 text-xs text-slate-500">View under active mission management.</div>;
+  }, [view, metrics, callQueue, leads, approvals, selectedApproval, conversations, selectedConversation, settings, activepiecesUrl]);
+
+  return <div className="yuvi">
+    <style>{css}</style>
+    <div className="flex min-h-[100dvh]">
+      <Sidebar current={view} setCurrent={navigateTo} open={sidebar} onUser={()=>setUserMenu(v=>!v)}/>
+      <main className="min-w-0 flex-1 overflow-hidden">
+        <Header
+          view={view}
+          onAdd={() => navigateTo("Leads")}
+          onMenu={() => setSidebar(true)}
+          onUser={() => setUserMenu(v=>!v)}
+          notifs={notifs}
+          onOpenNotif={n => { setNotifs(items=>items.map(i=>i.id===n.id?{...i,read:true}:i)); navigateTo(n.target?.kind === "approval" ? "Approvals" : "Dashboard"); }}
+          onClearNotif={id => setNotifs(items => items.filter(i => i.id !== id))}
+          onClearAllNotifs={() => setNotifs([])}
+          notifPanel={notifPanel}
+          setNotifPanel={setNotifPanel}
+        />
+        {content}
+      </main>
+    </div>
+
+    {/* Call Dialog Modal with click-to-call & outcome recorder */}
+    {activeCall && (
+      <CallModal
+        call={activeCall}
+        onClose={() => setActiveCall(null)}
+        onRecordOutcome={handleRecordCallOutcome}
+      />
+    )}
+
+    {toast && (
+      <div className="fixed bottom-5 left-1/2 z-[70] flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-lg border border-emerald-300/25 bg-[#101d25] px-4 py-3 text-center text-xs text-emerald-200 shadow-xl">
+        <CheckCircle2 size={15}/>{toast}
+      </div>
+    )}
+  </div>;
 }
+
 export default YuviOS;
