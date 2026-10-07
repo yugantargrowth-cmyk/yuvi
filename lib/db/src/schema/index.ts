@@ -140,6 +140,37 @@ export const crmTasksTable = pgTable("crm_tasks", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const employeeTasksTable = pgTable("employee_tasks", {
+  id: text("id").primaryKey(),
+  employeeId: text("employee_id").notNull(),
+  role: text("role").notNull(),
+  objective: text("objective").notNull(),
+  instructions: text("instructions"),
+  context: jsonb("context").default({}),
+  input: jsonb("input").default({}),
+  output: jsonb("output").default({}),
+  tools: jsonb("tools").default([]),
+  status: text("status").notNull().default("PENDING"),
+  retryCount: integer("retry_count").notNull().default(0),
+  maxRetries: integer("max_retries").notNull().default(3),
+  lastError: text("last_error"),
+  logs: jsonb("logs").default([]),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const employeeMemoryTable = pgTable("employee_memory", {
+  id: text("id").primaryKey(),
+  employeeId: text("employee_id").notNull(),
+  memoryKey: text("memory_key").notNull(),
+  memoryValue: jsonb("memory_value").notNull(),
+  contextScope: text("context_scope").default("global"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type Lead = typeof leadsTable.$inferSelect;
 export type InsertLead = typeof leadsTable.$inferInsert;
 export type SprintRun = typeof sprintRunsTable.$inferSelect;
@@ -150,3 +181,7 @@ export type LeadQualification = typeof leadQualificationsTable.$inferSelect;
 export type OutreachDraft = typeof outreachDraftsTable.$inferSelect;
 export type Approval = typeof approvalsTable.$inferSelect;
 export type CrmTask = typeof crmTasksTable.$inferSelect;
+export type EmployeeTaskRecord = typeof employeeTasksTable.$inferSelect;
+export type InsertEmployeeTaskRecord = typeof employeeTasksTable.$inferInsert;
+export type EmployeeMemoryRecord = typeof employeeMemoryTable.$inferSelect;
+export type InsertEmployeeMemoryRecord = typeof employeeMemoryTable.$inferInsert;
