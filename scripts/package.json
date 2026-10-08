@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "hello": "tsx ./src/hello.ts",
-    "test": "tsx ./src/test-sales-engine.ts",
+    "test": "tsx ./src/test-sales-engine.ts && tsx ./src/test-sprint3-verification.ts",
     "test:sales": "tsx ./src/test-sales-engine.ts",
+    "test:sprint3": "tsx ./src/test-sprint3-verification.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

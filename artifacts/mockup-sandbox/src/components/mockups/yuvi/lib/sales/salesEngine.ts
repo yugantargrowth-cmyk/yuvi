@@ -61,6 +61,9 @@ export function toTitleCase(str: string): string {
     .join(" ");
 }
 
+export const normalizeName = toTitleCase;
+export const calculateLeadScore = scoreAndQualifyLead;
+
 /**
  * Generates deterministic lead ID based on company name and domain/phone.
  */

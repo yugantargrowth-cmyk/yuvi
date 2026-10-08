@@ -52,7 +52,7 @@ export async function askGroq(
       }
       return { ok: false, reason: `Groq returned an error (HTTP ${res.status}). ${errBody.slice(0, 160)}` };
     }
-    const data = await res.json();
+    const data = (await res.json()) as any;
     const text = data?.choices?.[0]?.message?.content;
     if (!text) return { ok: false, reason: "Groq responded but returned no message content." };
     return { ok: true, text };
@@ -75,7 +75,7 @@ export async function testGroqConnection(apiKey: string): Promise<GroqTestResult
     if (!res.ok) {
       return { ok: false, reason: `Groq returned an error (HTTP ${res.status}).` };
     }
-    const data = await res.json().catch(() => null);
+    const data = ((await res.json().catch(() => null)) as any);
     const count = Array.isArray(data?.data) ? data.data.length : 0;
     return { ok: true, modelCount: count };
   } catch {

@@ -63,8 +63,37 @@ function resolveGroqModel(savedModelId: string | undefined): string {
 
 export type YuviSettings = {
   groq: { modelId: string; keyLastFour: string; hasKey: boolean; connectionStatus: "not_connected" | "connected" | "failed" };
+  supabase: {
+    url: string;
+    anonKey: string;
+    autoSync: boolean;
+    connectionStatus: "not_connected" | "connected" | "failed";
+  };
+  activepieces: {
+    baseUrl: string;
+    webhookPath: string;
+    connectionStatus: "not_connected" | "connected" | "failed";
+  };
+  voice: {
+    enabled: boolean;
+    autoListen: boolean;
+    lang: string;
+    rate: number;
+    voiceName?: string;
+  };
+  workforce: {
+    scout: { enabled: boolean; autonomy: "full" | "assisted" | "manual" };
+    hunter: { enabled: boolean; autonomy: "full" | "assisted" | "manual" };
+    researcher: { enabled: boolean; autonomy: "full" | "assisted" | "manual" };
+    analyst: { enabled: boolean; autonomy: "full" | "assisted" | "manual" };
+    operator: { enabled: boolean; autonomy: "full" | "assisted" | "manual" };
+    spark: { enabled: boolean; autonomy: "full" | "assisted" | "manual" };
+    publisher: { enabled: boolean; autonomy: "full" | "assisted" | "manual" };
+  };
   identity: {
     name: string;
+    founderName: string;
+    agencyName: string;
     personalityPrompt: string;
     customInstructions: string;
     capabilities: Record<string, boolean>;
@@ -86,11 +115,39 @@ Prefer concise, useful communication over unnecessary explanation.`;
 
 export const DEFAULT_SETTINGS: YuviSettings = {
   groq: { modelId: DEFAULT_GROQ_MODEL, keyLastFour: "", hasKey: false, connectionStatus: "not_connected" },
+  supabase: {
+    url: "https://alievzfakvarlnoqwnkp.supabase.co",
+    anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFsaWV2emZha3Zhcmxub3F3bmtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzODA5MDIsImV4cCI6MjEwNjk1NjkwMn0.4R3W-y2o5995kbrZp02X7YY2LRMu_2H_A96GWGgm7gs",
+    autoSync: true,
+    connectionStatus: "not_connected",
+  },
+  activepieces: {
+    baseUrl: "http://localhost:8080",
+    webhookPath: "/api/v1/webhooks/yuvi-task",
+    connectionStatus: "not_connected",
+  },
+  voice: {
+    enabled: true,
+    autoListen: false,
+    lang: "en-IN",
+    rate: 1.05,
+  },
+  workforce: {
+    scout: { enabled: true, autonomy: "full" },
+    hunter: { enabled: true, autonomy: "assisted" },
+    researcher: { enabled: true, autonomy: "full" },
+    analyst: { enabled: true, autonomy: "full" },
+    operator: { enabled: true, autonomy: "assisted" },
+    spark: { enabled: true, autonomy: "full" },
+    publisher: { enabled: true, autonomy: "assisted" },
+  },
   identity: {
     name: "YUVI",
+    founderName: "Shlok Pandya",
+    agencyName: "Yugantar Growth",
     personalityPrompt: DEFAULT_PERSONALITY,
-    customInstructions: "",
-    capabilities: { Chat: true, "Proactive briefings": true, "Dashboard awareness": true, "Agent awareness": true, Navigation: true, Notifications: true, "Task management": false, Memory: false, Knowledge: false, Approvals: true },
+    customInstructions: "Target market: High-ticket commercial B2B clients in Gujarat (Ahmedabad, Surat, Vadodara). Always prioritize direct phone and WhatsApp introductions with verifiable observations.",
+    capabilities: { Chat: true, "Proactive briefings": true, "Dashboard awareness": true, "Agent awareness": true, Navigation: true, Notifications: true, "Task management": true, Memory: true, Knowledge: true, Approvals: true },
     proactivity: { "Proactive mode": true, "Daily briefing": true, "Important-event notifications": true, "Agent completion notifications": true, "Approval notifications": true, "Error notifications": true }
   },
   lock: { passcodeDigest: "" }
@@ -105,6 +162,10 @@ export function loadSettings(): YuviSettings {
   const resolvedModelId = resolveGroqModel(mergedGroq.modelId);
   const settings: YuviSettings = {
     groq: { ...mergedGroq, modelId: resolvedModelId },
+    supabase: { ...DEFAULT_SETTINGS.supabase, ...(stored.supabase || {}) },
+    activepieces: { ...DEFAULT_SETTINGS.activepieces, ...(stored.activepieces || {}) },
+    voice: { ...DEFAULT_SETTINGS.voice, ...(stored.voice || {}) },
+    workforce: { ...DEFAULT_SETTINGS.workforce, ...(stored.workforce || {}) },
     identity: {
       ...DEFAULT_SETTINGS.identity,
       ...(stored.identity || {}),

@@ -60,6 +60,8 @@ export type LeadStatus =
   | "PENDING_APPROVAL"
   | "APPROVED"
   | "CONTACTED"
+  | "QUALIFIED"
+  | "PROPOSAL"
   | "REPLIED"
   | "INTERESTED"
   | "NOT_INTERESTED"
@@ -110,6 +112,30 @@ export interface NormalizedLead {
     dueDate: string;
     notes: string;
   };
+  // Extended CRM Metadata
+  owner?: string;
+  source?: string;
+  dealValue?: number;
+  lastContact?: string;
+  tasks?: LeadTask[];
+  activityHistory?: LeadActivity[];
+}
+
+export interface LeadTask {
+  id: string;
+  title: string;
+  dueDate?: string;
+  completed: boolean;
+  createdAt: string;
+  assignedTo?: string;
+}
+
+export interface LeadActivity {
+  id: string;
+  timestamp: string;
+  action: string;
+  note?: string;
+  author: string;
 }
 
 export interface CallQueueItem {
