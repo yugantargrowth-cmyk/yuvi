@@ -1,7 +1,7 @@
 // YuviOS.tsx — Production YUVI AI Business Operating System (Finished Daily-Use OS)
 import React, { useMemo, useState, useEffect, type ChangeEvent } from "react";
 import yuviLogo from "../../../assets/yuvi-logo.png";
-import { store, loadSettings, saveSettings, loadGroqKey, type YuviSettings } from "./lib/store";
+import { store, loadSettings, saveSettings, type YuviSettings } from "./lib/store";
 import { runDailySalesEngine } from "./lib/sales/salesEngine";
 import { upsertLeadToSupabase, deleteLeadFromSupabase } from "./lib/supabaseClient";
 import type { NormalizedLead, CallQueueItem, DailySalesDashboardMetrics, LeadTier } from "./lib/types/sales";

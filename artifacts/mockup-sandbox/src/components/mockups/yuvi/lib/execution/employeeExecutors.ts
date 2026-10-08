@@ -5,8 +5,8 @@
 import type { EmployeeId, EmployeeTask, NormalizedLead, CallQueueItem } from "../types/sales";
 import { createEmployeeTask, appendTaskLog } from "./taskSystem";
 import { dispatchTaskViaBridge, type ActivepiecesBridgeConfig } from "./activepiecesBridge";
-import { askGroq } from "../groq";
-import { loadGroqKey, loadSettings } from "../store";
+import { completeWithGroq } from "../groq";
+import { loadSettings } from "../store";
 import { normalizePhone, normalizeWebsite, normalizeName, calculateLeadScore } from "../sales/salesEngine";
 import { logEmployeeTaskToSupabase } from "../supabaseClient";
 
@@ -150,7 +150,6 @@ export async function executeEmployeeAction(
   task.timestamps.startedAt = new Date().toISOString();
   appendTaskLog(task, "info", `Assigned task to ${employeeId.toUpperCase()}: ${objective}`);
 
-  const groqKey = loadGroqKey();
   const settings = loadSettings();
 
   try {
@@ -216,9 +215,9 @@ export async function executeEmployeeAction(
       const topLead = ctx.leads.find(l => l.tier === "A") || ctx.leads[0];
       
       let aiIntel = "";
-      if (groqKey) {
-        appendTaskLog(task, "info", `Calling Groq (${settings.groq.modelId}) for deep B2B company intelligence...`);
-        const res = await askGroq([
+      try {
+        appendTaskLog(task, "info", `Calling Groq (${settings.groq.modelId}) via secure server endpoint for deep B2B company intelligence...`);
+        const res = await completeWithGroq([
           {
             role: "system",
             content: "You are Researcher, an elite B2B research agent for Yugantar Growth agency in Gujarat. Conduct a sharp 3-point digital footprint audit with verifiable observations, specific commercial bottlenecks, and high-probability revenue services."
@@ -227,12 +226,16 @@ export async function executeEmployeeAction(
             role: "user",
             content: `Analyze firm: ${topLead?.companyName} (${topLead?.city}, Gujarat). Category: ${topLead?.category || topLead?.industry}. Phone: ${topLead?.phone}.`
           }
-        ], groqKey, settings.groq.modelId);
+        ], settings.groq.modelId);
 
         if (res.ok) {
           aiIntel = res.text;
           appendTaskLog(task, "info", `Synthesized deep intelligence successfully.`);
+        } else {
+          appendTaskLog(task, "info", `Server AI synthesis note: ${res.reason}. Using structured verified intelligence.`);
         }
+      } catch {
+        appendTaskLog(task, "info", `Proceeding with deterministic CRM footprint inspection.`);
       }
 
       task.output = {
@@ -291,10 +294,9 @@ export async function executeEmployeeAction(
     } else if (employeeId === "spark") {
       appendTaskLog(task, "info", `Spark generating high-converting B2B content asset...`);
       let generatedPost = "";
-
-      if (groqKey) {
-        appendTaskLog(task, "info", `Consulting Groq (${settings.groq.modelId}) for content copy generation...`);
-        const res = await askGroq([
+      try {
+        appendTaskLog(task, "info", `Consulting Groq (${settings.groq.modelId}) via secure server endpoint for content copy generation...`);
+        const res = await completeWithGroq([
           {
             role: "system",
             content: "You are Spark, Content Intelligence for Yugantar Growth. Write a high-converting, authoritative LinkedIn/Instagram post for Gujarat architecture and luxury interior studios explaining why relying only on word-of-mouth is leaving ₹50L+ on the table."
@@ -303,9 +305,16 @@ export async function executeEmployeeAction(
             role: "user",
             content: "Draft a high-impact post with a hook, commercial problem, the conversion architecture solution, and a low-friction CTA."
           }
-        ], groqKey, settings.groq.modelId);
+        ], settings.groq.modelId);
 
-        if (res.ok) generatedPost = res.text;
+        if (res.ok) {
+          generatedPost = res.text;
+          appendTaskLog(task, "info", `Synthesized high-converting copy via Groq.`);
+        } else {
+          appendTaskLog(task, "info", `Server AI copy note: ${res.reason}. Using premium agency copy template.`);
+        }
+      } catch {
+        appendTaskLog(task, "info", `Using standard high-converting copy asset.`);
       }
 
       task.output = {

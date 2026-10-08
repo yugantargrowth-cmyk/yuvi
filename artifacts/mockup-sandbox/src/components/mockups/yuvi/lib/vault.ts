@@ -1,7 +1,8 @@
 /**
  * lib/vault.ts — encrypted secret vault (PIN + optional biometric unlock).
  *
- * Replaces plaintext localStorage for secrets (Groq key, GitHub PAT).
+ * Replaces plaintext localStorage for secrets (e.g. GitHub PAT).
+ * Groq API keys are handled strictly server-side via /api/groq and never stored in client vault.
  *
  * Design (unchanged from the original):
  *  - One random 256-bit AES-GCM "master key" is generated once, on this device.
@@ -248,12 +249,17 @@ export function clearAllItems(): void {
   _cache = {};
 }
 
-// ── one-time migration from legacy plaintext keys ────────────────────────
-// Call after first successful unlock post-upgrade. Moves any old plaintext
-// secrets into the vault, then deletes the plaintext copies.
 export function migrateLegacyPlaintext(map: Record<string, string>): void {
-  // map: { 'yuvi_groq_key': 'yuvi_groq_key' } (localStorageKey -> vaultItemName)
+  // Purge any legacy Groq keys completely rather than migrating to vault
+  localStorage.removeItem("yuvi_groq_key");
+  localStorage.removeItem("groq_key");
+  localStorage.removeItem("yuvi:groq_key");
+
   Object.keys(map).forEach((lsKey) => {
+    if (lsKey.toLowerCase().includes("groq")) {
+      localStorage.removeItem(lsKey);
+      return;
+    }
     const v = localStorage.getItem(lsKey);
     if (v) {
       setItem(map[lsKey], v);

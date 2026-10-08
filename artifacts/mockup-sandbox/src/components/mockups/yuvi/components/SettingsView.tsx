@@ -1,7 +1,7 @@
 // components/SettingsView.tsx — Single Clear Control Center for YUVI OS
 import React, { useState, type Dispatch, type SetStateAction } from "react";
 import type { YuviSettings } from "../lib/store";
-import { GROQ_MODELS, saveGroqKey, loadGroqKey } from "../lib/store";
+import { GROQ_MODELS } from "../lib/store";
 import { testGroqConnection } from "../lib/groq";
 import { testSupabaseConnection, syncLeadsWithSupabase } from "../lib/supabaseClient";
 import { testActivepiecesConnection } from "../lib/execution/activepiecesBridge";
@@ -44,54 +44,36 @@ export function SettingsView({
   const [activeTab, setActiveTab] = useState(tabs[0].id);
 
   // --- GROQ STATE ---
-  const [groqKey, setGroqKey] = useState(() => loadGroqKey());
+  const [groqKey, setGroqKey] = useState("");
   const [showGroqKey, setShowGroqKey] = useState(false);
   const [testingGroq, setTestingGroq] = useState(false);
   const [groqTestMsg, setGroqTestMsg] = useState("");
 
   const saveGroq = () => {
-    if (!groqKey.trim()) {
-      notify("Please enter a Groq API key.");
-      return;
-    }
-    saveGroqKey(groqKey.trim());
-    setSettings(s => ({
-      ...s,
-      groq: {
-        ...s.groq,
-        hasKey: true,
-        keyLastFour: groqKey.trim().slice(-4),
-        connectionStatus: "not_connected",
-      },
-    }));
-    setGroqTestMsg("");
-    notify("Groq key securely saved locally. Never logged or exposed.");
+    setGroqKey("");
+    notify("Groq credentials are managed securely server-side via GROQ_API_KEY. Browser key storage is disabled for security.");
   };
 
   const runTestGroq = async () => {
-    if (!groqKey.trim()) {
-      notify("Enter a Groq API key first.");
-      return;
-    }
     setTestingGroq(true);
     setGroqTestMsg("");
-    const result = await testGroqConnection(groqKey.trim());
+    const result = await testGroqConnection();
     setTestingGroq(false);
 
     if (result.ok) {
       setSettings(s => ({
         ...s,
-        groq: { ...s.groq, connectionStatus: "connected", hasKey: true, keyLastFour: groqKey.trim().slice(-4) },
+        groq: { ...s.groq, connectionStatus: "connected", hasKey: true, keyLastFour: "" },
       }));
-      setGroqTestMsg(`Connected to Groq! Verified access to ${result.modelCount} models.`);
-      notify("Groq connection verified!");
+      setGroqTestMsg(`Connected to Groq via server-side proxy! Verified access to ${result.modelCount} models.`);
+      notify("Groq server connection verified!");
     } else {
       setSettings(s => ({
         ...s,
-        groq: { ...s.groq, connectionStatus: "failed" },
+        groq: { ...s.groq, connectionStatus: "failed", hasKey: false },
       }));
       setGroqTestMsg(result.reason);
-      notify(`Groq test failed: ${result.reason}`);
+      notify(`Groq test: ${result.reason}`);
     }
   };
 
@@ -249,30 +231,31 @@ export function SettingsView({
 
               <div className="rounded-xl border border-violet-400/20 bg-violet-500/5 p-4 text-xs text-slate-300 space-y-2">
                 <div className="flex items-center gap-2 font-semibold text-violet-200">
-                  <ShieldCheck size={16} /> Privacy & Client-Side Security Guarantee
+                  <ShieldCheck size={16} /> Privacy & Server-Side Security Guarantee
                 </div>
                 <div>
-                  Your Groq API key is stored strictly in your browser session storage. It is only ever transmitted directly to <code>api.groq.com</code> over encrypted HTTPS. It is never logged or stored on any intermediate server.
+                  All Groq inference and model queries execute via server-side <code>/api/groq</code> using the server's <code>GROQ_API_KEY</code>. No API keys are stored in localStorage or browser session, eliminating client credential exposure.
                 </div>
               </div>
 
               <SettingRow
                 label="Groq API Key"
-                description="Obtain your key from console.groq.com/keys. Masked by default."
+                description="Managed securely on server via Vercel GROQ_API_KEY environment variable."
               >
                 <div className="flex items-center gap-2">
                   <div className="relative">
                     <input
                       type={showGroqKey ? "text" : "password"}
-                      value={groqKey}
+                      value={showGroqKey ? (groqKey || "GROQ_API_KEY (Server-Side)") : "••••••••••••••••••••••••••••••••"}
                       onChange={e => setGroqKey(e.target.value)}
-                      placeholder="gsk_..."
-                      className="w-56 rounded-lg border border-white/10 bg-black/40 px-3 py-2 font-mono text-xs text-white outline-none focus:border-violet-400 sm:w-72"
+                      placeholder="GROQ_API_KEY configured on server"
+                      className="w-56 rounded-lg border border-white/10 bg-black/40 px-3 py-2 font-mono text-xs text-slate-300 outline-none focus:border-violet-400 sm:w-72"
                     />
                     <button
                       type="button"
                       onClick={() => setShowGroqKey(!showGroqKey)}
                       className="absolute right-2 top-2.5 text-slate-400 hover:text-white"
+                      title={showGroqKey ? "Hide" : "Show"}
                     >
                       {showGroqKey ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
@@ -283,9 +266,9 @@ export function SettingsView({
                 </div>
               </SettingRow>
 
-              {settings.groq.hasKey && (
+              {settings.groq.connectionStatus === "connected" && (
                 <div className="border-b border-white/5 py-3 text-xs text-slate-400">
-                  Active key saved ending in <span className="font-mono text-cyan-300 font-bold">...{settings.groq.keyLastFour}</span>.
+                  Server proxy active: <span className="font-mono text-cyan-300 font-bold">GROQ_API_KEY (Server-Side Secret)</span>.
                 </div>
               )}
 

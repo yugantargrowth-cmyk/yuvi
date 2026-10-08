@@ -153,15 +153,35 @@ export const DEFAULT_SETTINGS: YuviSettings = {
   lock: { passcodeDigest: "" }
 };
 
+export function purgeBrowserGroqKeys(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(PREFIX + "groq_key");
+    window.localStorage.removeItem("groq_key");
+    window.localStorage.removeItem("yuvi_groq_key");
+    window.localStorage.removeItem("yuvi_vault_item__yuvi_groq_key");
+    window.sessionStorage?.removeItem("groq_key");
+    window.sessionStorage?.removeItem(PREFIX + "groq_key");
+    window.sessionStorage?.removeItem("yuvi_groq_key");
+  } catch {
+    // Storage access can fail in restrictive contexts; ignore
+  }
+}
+
 const SETTINGS_KEY = "settings";
-const GROQ_KEY_KEY = "groq_key"; // stored separately from settings metadata so it's easy to exclude/clear independently
 
 export function loadSettings(): YuviSettings {
+  purgeBrowserGroqKeys();
   const stored = read<Partial<YuviSettings>>(SETTINGS_KEY, {});
   const mergedGroq = { ...DEFAULT_SETTINGS.groq, ...(stored.groq || {}) };
   const resolvedModelId = resolveGroqModel(mergedGroq.modelId);
   const settings: YuviSettings = {
-    groq: { ...mergedGroq, modelId: resolvedModelId },
+    groq: {
+      ...mergedGroq,
+      modelId: resolvedModelId,
+      // Never persist client-side keys or key fragments
+      keyLastFour: "",
+    },
     supabase: { ...DEFAULT_SETTINGS.supabase, ...(stored.supabase || {}) },
     activepieces: { ...DEFAULT_SETTINGS.activepieces, ...(stored.activepieces || {}) },
     voice: { ...DEFAULT_SETTINGS.voice, ...(stored.voice || {}) },
@@ -183,19 +203,26 @@ export function loadSettings(): YuviSettings {
 }
 
 export function saveSettings(settings: YuviSettings): void {
-  write(SETTINGS_KEY, settings);
+  // Ensure no sensitive key information is accidentally stored in settings
+  const sanitized: YuviSettings = {
+    ...settings,
+    groq: {
+      ...settings.groq,
+      keyLastFour: "",
+    },
+  };
+  write(SETTINGS_KEY, sanitized);
 }
 
-// The raw Groq key is intentionally kept in a separate key from the rest of settings,
-// stored in localStorage only (never logged, never sent anywhere except directly to Groq's API
-// for the connection test). This is a frontend-only preview; a production build should move
-// key storage and the Groq call itself behind the existing API server.
+// Deprecated stubs retained for compatibility. All Groq keys are stored strictly
+// on the server in GROQ_API_KEY and never stored in browser state.
 export function loadGroqKey(): string {
-  return read<string>(GROQ_KEY_KEY, "");
+  purgeBrowserGroqKeys();
+  return "";
 }
-export function saveGroqKey(key: string): void {
-  write(GROQ_KEY_KEY, key);
+export function saveGroqKey(_key: string): void {
+  purgeBrowserGroqKeys();
 }
 export function clearGroqKey(): void {
-  remove(GROQ_KEY_KEY);
+  purgeBrowserGroqKeys();
 }

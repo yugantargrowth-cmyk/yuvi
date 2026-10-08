@@ -3,8 +3,7 @@ import React, { useState, useRef, useEffect, type FormEvent } from "react";
 import type { NormalizedLead, CallQueueItem, DailySalesReport } from "../lib/types/sales";
 import type { YuviSettings } from "../lib/store";
 import { detectDailyIntent, handleDailyCommand } from "../lib/sales/intentRouter";
-import { askGroq } from "../lib/groq";
-import { loadGroqKey } from "../lib/store";
+import { completeWithGroq } from "../lib/groq";
 import { startListening, stopListening, speakText, stopSpeaking, isSpeechRecognitionSupported } from "../lib/voiceEngine";
 import { INITIAL_KNOWLEDGE_ARTICLES, buildKnowledgeContextPrompt } from "../lib/knowledgeBase";
 import { Button, Avatar, Panel, ViewHeading } from "./ui";
@@ -100,55 +99,52 @@ export function ChatView({
       }
     }
 
-    // 2. Groq AI Generation with Full Live Context
-    const groqKey = loadGroqKey();
-    if (groqKey) {
-      try {
-        const kbContext = buildKnowledgeContextPrompt(INITIAL_KNOWLEDGE_ARTICLES);
-        const systemPrompt = `${settings.identity.personalityPrompt}\n\n${settings.identity.customInstructions}\n\n=== LIVE CRM TELEMETRY ===\nTotal Leads in Radar: ${leads.length}\nQualified Leads (Tier A/B): ${leads.filter(l => l.tier === "A" || l.tier === "B").length}\nPending Phone Calls: ${callQueue.filter(c => c.callStatus === "PENDING").length}\nWon Deals: ${leads.filter(l => l.status === "WON").length}\n=== END TELEMETRY ===\n${kbContext}`;
+    // 2. Groq AI Generation with Full Live Context (via secure server-side /api/groq)
+    try {
+      const kbContext = buildKnowledgeContextPrompt(INITIAL_KNOWLEDGE_ARTICLES);
+      const systemPrompt = `${settings.identity.personalityPrompt}\n\n${settings.identity.customInstructions}\n\n=== LIVE CRM TELEMETRY ===\nTotal Leads in Radar: ${leads.length}\nQualified Leads (Tier A/B): ${leads.filter(l => l.tier === "A" || l.tier === "B").length}\nPending Phone Calls: ${callQueue.filter(c => c.callStatus === "PENDING").length}\nWon Deals: ${leads.filter(l => l.status === "WON").length}\n=== END TELEMETRY ===\n${kbContext}`;
 
-        const history = messages.slice(-5).map(m => ({
-          role: m.role === "yuvi" ? ("assistant" as const) : ("user" as const),
-          content: m.text,
-        }));
+      const history = messages.slice(-5).map(m => ({
+        role: m.role === "yuvi" ? ("assistant" as const) : ("user" as const),
+        content: m.text,
+      }));
 
-        const res = await askGroq(
-          [
-            { role: "system", content: systemPrompt },
-            ...history,
-            { role: "user", content: clean },
-          ],
-          groqKey,
-          settings.groq.modelId
-        );
+      const res = await completeWithGroq(
+        [
+          { role: "system", content: systemPrompt },
+          ...history,
+          { role: "user", content: clean },
+        ],
+        settings.groq.modelId
+      );
 
+      if (res.ok) {
         setIsThinking(false);
-        const replyText = res.ok ? res.text : `⚠️ ${res.reason}`;
         const replyMsg: ChatMessage = {
           id: `yuv_${Date.now()}`,
           role: "yuvi",
-          text: replyText,
+          text: res.text,
           timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
         };
         setMessages(prev => [...prev, replyMsg]);
 
-        if (res.ok && settings.voice?.enabled) {
+        if (settings.voice?.enabled) {
           setIsSpeaking(true);
-          speakText(replyText, {
+          speakText(res.text, {
             rate: settings.voice?.rate ?? 1.05,
             onEnd: () => setIsSpeaking(false),
             onError: () => setIsSpeaking(false),
           });
         }
         return;
-      } catch (err) {
-        setIsThinking(false);
       }
+    } catch {
+      // Fallback below
     }
 
     // 3. Deterministic Fallback Response
     setIsThinking(false);
-    const offlineReply = `I received your command: "${clean}".\n\nSales Engine Status: Active with ${leads.length} leads in radar and ${callQueue.filter(c => c.callStatus === "PENDING").length} calls due.\n\nTo enable open natural-language reasoning, add a Groq API key in Settings → Groq & AI Models. You can also run these direct commands right now:\n• "Work on my leads today"\n• "Give me todays calls"\n• "Prepare todays outreach"\n• "Show hot leads"\n• "What should I do today?"\n• "Give me todays sales report"`;
+    const offlineReply = `I received your command: "${clean}".\n\nSales Engine Status: Active with ${leads.length} leads in radar and ${callQueue.filter(c => c.callStatus === "PENDING").length} calls due.\n\nTo enable open natural-language reasoning, ensure GROQ_API_KEY is configured in your Vercel project environment variables. You can also run these direct commands right now:\n• "Work on my leads today"\n• "Give me todays calls"\n• "Prepare todays outreach"\n• "Show hot leads"\n• "What should I do today?"\n• "Give me todays sales report"`;
 
     const replyMsg: ChatMessage = {
       id: `yuv_${Date.now()}`,

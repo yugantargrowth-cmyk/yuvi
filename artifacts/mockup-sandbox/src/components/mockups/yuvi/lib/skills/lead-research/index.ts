@@ -7,23 +7,20 @@
 // the point of Phase 6 is that capabilities are dispatched uniformly, not
 // that this one feature is special-cased.
 
-import { askGroq, type ChatMessage } from "../../groq";
+import { completeWithGroq, type ChatMessage } from "../../groq";
 import type { SkillModule } from "../types";
 
 export interface GenerateBriefArgs {
   lead: { name: string; company: string; category: string; stage: string; value: string };
   personalityPrompt: string;
-  apiKey: string;
+  apiKey?: string;
   modelId: string;
 }
 
 export type GenerateBriefResult = { ok: true; text: string } | { ok: false; reason: string };
 
 async function generateBrief(args: GenerateBriefArgs): Promise<GenerateBriefResult> {
-  const { lead, personalityPrompt, apiKey, modelId } = args;
-  if (!apiKey) {
-    return { ok: false, reason: "No Groq API key saved yet. Add one in Settings → API & AI." };
-  }
+  const { lead, personalityPrompt, modelId } = args;
 
   const prompt = `Give a short, practical outreach brief for a business approaching this lead:
 Name: ${lead.name}
@@ -39,7 +36,7 @@ Give: 1) a likely pain point for a business like this, 2) one specific opening l
     { role: "user", content: prompt },
   ];
 
-  const result = await askGroq(messages, apiKey, modelId);
+  const result = await completeWithGroq(messages, modelId);
   if (!result.ok) return { ok: false, reason: result.reason };
   return { ok: true, text: result.text };
 }
