@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "tsx ./src/test-sales-engine.ts && tsx ./src/test-sprint3-verification.ts && tsx ./src/test-groq-security.ts",
+    "test": "tsx ./src/test-sales-engine.ts && tsx ./src/test-sprint3-verification.ts && tsx ./src/test-groq-security.ts && tsx ./src/test-crm-delivery-finance.ts",
     "test:sales": "tsx ./src/test-sales-engine.ts",
     "test:sprint3": "tsx ./src/test-sprint3-verification.ts",
     "test:groq": "tsx ./src/test-groq-security.ts",
+    "test:crm-finance": "tsx ./src/test-crm-delivery-finance.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

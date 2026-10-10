@@ -275,12 +275,26 @@ export function DashboardView({
             </div>
           </div>
 
-          <button
-            onClick={() => setCurrent("Pipeline")}
-            className="mt-4 text-xs text-violet-300 hover:text-white flex items-center gap-1 transition-colors pt-2 border-t border-white/5"
-          >
-            Open Interactive Kanban Pipeline <ArrowRight size={12} />
-          </button>
+          <div className="mt-4 pt-3 border-t border-white/5 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <button
+              onClick={() => setCurrent("Pipeline")}
+              className="text-violet-300 hover:text-white flex items-center gap-1 transition-colors"
+            >
+              Kanban Pipeline <ArrowRight size={11} />
+            </button>
+            <button
+              onClick={() => setCurrent("Proposals")}
+              className="text-cyan-300 hover:text-white flex items-center gap-1 transition-colors"
+            >
+              Proposals <ArrowRight size={11} />
+            </button>
+            <button
+              onClick={() => setCurrent("Finance")}
+              className="text-emerald-300 hover:text-white flex items-center gap-1 transition-colors"
+            >
+              Finance & Invoices <ArrowRight size={11} />
+            </button>
+          </div>
         </Panel>
       </div>
     </div>

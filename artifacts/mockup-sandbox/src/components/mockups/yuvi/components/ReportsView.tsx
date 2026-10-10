@@ -1,13 +1,15 @@
-// components/ReportsView.tsx — Data-Driven Performance Analytics & Analyst Brief
 import React from "react";
-import type { NormalizedLead, CallQueueItem, DailySalesDashboardMetrics } from "../lib/types/sales";
+import type { NormalizedLead, CallQueueItem, DailySalesDashboardMetrics, ClientAccount, ClientInvoice } from "../lib/types/sales";
+import { computeFinancialSummary } from "../lib/sales/financeEngine";
 import { Button, Panel, Sparkline, ViewHeading } from "./ui";
-import { FileBarChart, Download, Target, TrendingUp, CheckCircle2, PhoneCall, Award } from "lucide-react";
+import { FileBarChart, Download, Target, TrendingUp, CheckCircle2, PhoneCall, Award, IndianRupee } from "lucide-react";
 
 interface ReportsViewProps {
   metrics: DailySalesDashboardMetrics;
   leads: NormalizedLead[];
   callQueue: CallQueueItem[];
+  clients?: ClientAccount[];
+  invoices?: ClientInvoice[];
   notify: (text: string) => void;
 }
 
@@ -15,8 +17,12 @@ export function ReportsView({
   metrics,
   leads,
   callQueue,
+  clients = [],
+  invoices = [],
   notify,
 }: ReportsViewProps) {
+  const finance = computeFinancialSummary(invoices, clients);
+
   const exportReport = () => {
     const reportText = `YUGANTAR GROWTH — DAILY PERFORMANCE TELEMETRY REPORT
 Date: ${new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
@@ -29,17 +35,25 @@ Date: ${new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric
 • Tier C Targets: ${metrics.tierBreakdown.C}
 • Disqualified (Tier D): ${metrics.tierBreakdown.D}
 
-2. DAILY SALES ENGINE ACTIVITY:
+2. COMMERCIAL REVENUE & RETAINERS:
+• Active Retained Clients: ${clients.filter(c => c.status === "ACTIVE").length}
+• Monthly Retainer Volume: ₹${finance.activeRetainersMonthly.toLocaleString("en-IN")} / mo
+• Total Invoiced: ₹${finance.totalInvoiced.toLocaleString("en-IN")}
+• Cash Collected to Date: ₹${finance.totalCollected.toLocaleString("en-IN")}
+• Outstanding Collections Due: ₹${finance.outstandingBalance.toLocaleString("en-IN")}
+
+3. DAILY SALES ENGINE ACTIVITY:
 • Calls Queued: ${callQueue.length}
 • Calls Completed Today: ${metrics.callsCompleted}
 • Outbound Outreach Pending Approval: ${metrics.outreachDue}
 • Active Opportunities / Replies: ${metrics.interestedProspects}
 • Retained Clients (Won): ${metrics.won}
 
-3. ANALYST RECOMMENDATIONS:
+4. ANALYST RECOMMENDATIONS:
 • Prioritize Tier A direct phone outreach in Ahmedabad corridor.
 • Review and dispatch staged WhatsApp copy in Approvals queue.
 • Follow up with leads requesting callbacks within 24 hours.
+• Monitor outstanding invoices due this month.
 `;
 
     const blob = new Blob([reportText], { type: "text/plain;charset=utf-8" });
@@ -90,8 +104,51 @@ Date: ${new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric
 
         <Panel className="p-4">
           <div className="text-[10px] uppercase tracking-wider text-slate-400">Won / Retained Clients</div>
-          <div className="mt-2 text-2xl font-bold text-white">{metrics.won}</div>
+          <div className="mt-2 text-2xl font-bold text-white">{clients.filter(c => c.status === "ACTIVE").length || metrics.won}</div>
           <div className="mt-1 text-[9px] text-emerald-300">Commercial Retainers</div>
+        </Panel>
+      </div>
+
+      {/* Real Financial & Revenue Telemetry Bar */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Panel className="p-4 border-l-2 border-emerald-400">
+          <div className="text-[10px] uppercase tracking-wider text-slate-400">Cash Collected (Real)</div>
+          <div className="mt-2 text-2xl font-bold text-emerald-300 font-mono">
+            ₹{(finance.totalCollected / 100000).toFixed(2)}L
+          </div>
+          <div className="mt-1 text-[9px] text-emerald-200">
+            {finance.invoicesCount.paid} settled invoices
+          </div>
+        </Panel>
+
+        <Panel className="p-4 border-l-2 border-cyan-400">
+          <div className="text-[10px] uppercase tracking-wider text-slate-400">Outstanding Balance</div>
+          <div className="mt-2 text-2xl font-bold text-cyan-300 font-mono">
+            ₹{(finance.outstandingBalance / 100000).toFixed(2)}L
+          </div>
+          <div className="mt-1 text-[9px] text-cyan-200">
+            {finance.invoicesCount.pending} pending collection
+          </div>
+        </Panel>
+
+        <Panel className="p-4 border-l-2 border-violet-400">
+          <div className="text-[10px] uppercase tracking-wider text-slate-400">Active Monthly Retainers</div>
+          <div className="mt-2 text-2xl font-bold text-violet-300 font-mono">
+            ₹{(finance.activeRetainersMonthly / 100000).toFixed(2)}L <span className="text-xs font-normal text-slate-400">/ mo</span>
+          </div>
+          <div className="mt-1 text-[9px] text-slate-400">
+            From {clients.filter(c => c.status === "ACTIVE").length} contracted accounts
+          </div>
+        </Panel>
+
+        <Panel className="p-4 border-l-2 border-amber-400">
+          <div className="text-[10px] uppercase tracking-wider text-slate-400">Total Billed to Date</div>
+          <div className="mt-2 text-2xl font-bold text-white font-mono">
+            ₹{(finance.totalInvoiced / 100000).toFixed(2)}L
+          </div>
+          <div className="mt-1 text-[9px] text-slate-400">
+            {finance.invoicesCount.total} total tax invoices
+          </div>
         </Panel>
       </div>
 

@@ -5,7 +5,7 @@ import { Button, TierPill, StatusPill } from "./ui";
 import {
   X, Phone, MessageCircle, Mail, Globe, MapPin, Calendar, Clock,
   CheckCircle2, Plus, Trash2, Sparkles, Send, Building2, User,
-  FileText, CheckSquare, History, ExternalLink, ArrowRight
+  FileText, CheckSquare, History, ExternalLink, ArrowRight, UserCheck
 } from "lucide-react";
 
 interface LeadDetailModalProps {
@@ -15,6 +15,8 @@ interface LeadDetailModalProps {
   onDeleteLead: (leadId: string) => void;
   onOpenCall: (lead: NormalizedLead) => void;
   onRunResearch: (lead: NormalizedLead) => void;
+  onConvertToClient?: (lead: NormalizedLead, options: any) => void;
+  onCreateProposal?: (lead: NormalizedLead) => void;
   notify: (text: string) => void;
 }
 
@@ -25,6 +27,8 @@ export function LeadDetailModal({
   onDeleteLead,
   onOpenCall,
   onRunResearch,
+  onConvertToClient,
+  onCreateProposal,
   notify,
 }: LeadDetailModalProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "notes" | "tasks" | "outreach" | "activity">("overview");
@@ -44,6 +48,11 @@ export function LeadDetailModal({
   // Tasks
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDate, setNewTaskDate] = useState(() => new Date(Date.now() + 48 * 3600 * 1000).toISOString().split("T")[0]);
+
+  // Conversion state
+  const [showConvertModal, setShowConvertModal] = useState(false);
+  const [convType, setConvType] = useState<"MONTHLY_RETAINER" | "FIXED_PROJECT">("MONTHLY_RETAINER");
+  const [convFee, setConvFee] = useState<number>(120000);
 
   const handleSaveInfo = (e: FormEvent) => {
     e.preventDefault();
@@ -235,6 +244,16 @@ export function LeadDetailModal({
             <Button onClick={() => onRunResearch(lead)}>
               <Sparkles size={13} /> AI Research
             </Button>
+            {lead.status !== "WON" && onConvertToClient && (
+              <Button variant="success" onClick={() => setShowConvertModal(true)}>
+                <UserCheck size={13} /> Convert to Client
+              </Button>
+            )}
+            {onCreateProposal && (
+              <Button variant="primary" onClick={() => onCreateProposal(lead)}>
+                <FileText size={13} /> Draft Proposal
+              </Button>
+            )}
           </div>
         </div>
 
@@ -520,6 +539,74 @@ export function LeadDetailModal({
             </div>
           )}
         </div>
+
+        {/* CONVERT TO CLIENT MODAL */}
+        {showConvertModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4" onClick={e => e.stopPropagation()}>
+            <div className="w-full max-w-md rounded-2xl border border-emerald-500/30 bg-[#0d0f22] p-6 shadow-2xl text-left">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-emerald-400" /> Convert Lead to Retained Client
+              </h3>
+              <p className="mt-1 text-xs text-slate-400">
+                Converts <b>{lead.companyName}</b> into an active client account while preserving complete history.
+              </p>
+
+              <form
+                onSubmit={e => {
+                  e.preventDefault();
+                  if (onConvertToClient) {
+                    onConvertToClient(lead, {
+                      engagementType: convType,
+                      monthlyRetainer: convType === "MONTHLY_RETAINER" ? convFee : undefined,
+                      contractValue: convType === "FIXED_PROJECT" ? convFee : undefined,
+                      agreedScope: [
+                        lead.primaryService || "Growth Operating System & Outbound Pipeline",
+                        "High-converting B2B messaging framework",
+                        "Weekly pipeline synchronization"
+                      ]
+                    });
+                  }
+                  setShowConvertModal(false);
+                  onClose();
+                }}
+                className="mt-4 space-y-4"
+              >
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-slate-300">Agreement Structure</label>
+                  <select
+                    value={convType}
+                    onChange={e => setConvType(e.target.value as any)}
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-white outline-none"
+                  >
+                    <option value="MONTHLY_RETAINER">Monthly Agency Retainer</option>
+                    <option value="FIXED_PROJECT">Fixed Deliverable Project</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-slate-300">
+                    {convType === "MONTHLY_RETAINER" ? "Monthly Retainer Amount (₹)" : "Total Contract Value (₹)"}
+                  </label>
+                  <input
+                    type="number"
+                    min={10000}
+                    step={5000}
+                    value={convFee}
+                    onChange={e => setConvFee(Number(e.target.value))}
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-white font-mono outline-none"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button onClick={() => setShowConvertModal(false)}>Cancel</Button>
+                  <Button variant="success" type="submit">
+                    Confirm Conversion
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

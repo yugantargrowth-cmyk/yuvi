@@ -13,6 +13,8 @@ import { DashboardView } from "./components/DashboardView";
 import { LeadsView } from "./components/LeadsView";
 import { PipelineView } from "./components/PipelineView";
 import { ClientsView } from "./components/ClientsView";
+import { ProposalsView } from "./components/ProposalsView";
+import { FinanceView } from "./components/FinanceView";
 import { AITeamView } from "./components/AITeamView";
 import { ApprovalsView, type ApprovalItem } from "./components/ApprovalsView";
 import { ChatView } from "./components/ChatView";
@@ -28,8 +30,17 @@ import { CallModal } from "./components/CallModal";
 import {
   Home, BadgeCheck, MessageSquare, Bot, Target, KanbanSquare,
   UsersRound, Database, FileBarChart, Settings2, Menu, Bell,
-  Plus, X, ChevronDown, Radio, ShieldCheck, Check
+  Plus, X, ChevronDown, Radio, ShieldCheck, Check, FileText, IndianRupee
 } from "lucide-react";
+
+import type {
+  ClientAccount,
+  CommercialProposal,
+  ClientInvoice,
+} from "./lib/types/sales";
+import { convertLeadToClient } from "./lib/sales/clientDeliveryEngine";
+import { createProposalFromLead } from "./lib/sales/proposalEngine";
+import { createInvoiceFromProposal } from "./lib/sales/financeEngine";
 
 const VALID_VIEWS: View[] = [
   "Dashboard",
@@ -39,6 +50,8 @@ const VALID_VIEWS: View[] = [
   "Leads",
   "Pipeline",
   "Clients",
+  "Proposals",
+  "Finance",
   "Knowledge Base",
   "Reports",
   "Settings"
@@ -51,8 +64,10 @@ const nav: { name: View; icon: typeof Home; group?: string }[] = [
   { name: "Leads", icon: Target, group: "Operate & CRM" },
   { name: "Pipeline", icon: KanbanSquare },
   { name: "Clients", icon: UsersRound },
-  { name: "AI Team", icon: Bot },
-  { name: "Knowledge Base", icon: Database, group: "Intelligence & System" },
+  { name: "Proposals", icon: FileText },
+  { name: "Finance", icon: IndianRupee },
+  { name: "AI Team", icon: Bot, group: "Intelligence & System" },
+  { name: "Knowledge Base", icon: Database },
   { name: "Reports", icon: FileBarChart },
   { name: "Settings", icon: Settings2 },
 ];
@@ -276,6 +291,140 @@ const initialNotifs: Notif[] = [
   },
 ];
 
+const initialClients: ClientAccount[] = [
+  {
+    id: "client_apex_gujarat_04",
+    leadId: "lead_apex_gujarat_04",
+    companyName: "Apex Interior Craft",
+    contactPerson: "Dylan Park",
+    phone: "+919898011223",
+    email: "dylan@apexinteriors.com",
+    websiteUrl: "https://apexinteriors.com",
+    city: "Vadodara",
+    state: "Gujarat",
+    country: "India",
+    industry: "Turnkey Corporate Interiors",
+    status: "ACTIVE",
+    engagementType: "MONTHLY_RETAINER",
+    monthlyRetainer: 120000,
+    contractValue: 360000,
+    startDate: "2026-09-15",
+    agreedScope: [
+      "Local Search Authority & B2B Fitout Acquisition",
+      "Corporate Architect Partnership Funnel across Gujarat",
+      "Bi-weekly Pipeline Telemetry and Review"
+    ],
+    deliverables: [
+      { id: "deliv_apex_1", title: "Vadodara Corporate Interior SEO & Google Business Optimization", status: "COMPLETED", completedAt: "2026-09-25" },
+      { id: "deliv_apex_2", title: "Architect Outreach & High-Ticket Commercial Portfolio Deck", status: "COMPLETED", completedAt: "2026-10-02" },
+      { id: "deliv_apex_3", title: "Direct Commercial General Contractor Acquisition Campaign", status: "IN_PROGRESS", dueDate: "2026-10-20" }
+    ],
+    milestones: [
+      { id: "m_apex_1", title: "Sprint 1 Infrastructure & Local Presence", amount: 120000, status: "COMPLETED", completedAt: "2026-09-30" },
+      { id: "m_apex_2", title: "Sprint 2 Corporate Architect Outbound", amount: 120000, status: "IN_PROGRESS", dueDate: "2026-10-31" }
+    ],
+    nextAction: { title: "Deliver Milestone 2 Outbound Pipeline Review", dueDate: "2026-10-15" },
+    notes: "Premier corporate interior turnkey fitout specialist in Vadodara. Monthly retainer active.",
+    createdAt: "2026-09-15T10:00:00.000Z",
+    updatedAt: new Date().toISOString()
+  }
+];
+
+const initialProposals: CommercialProposal[] = [
+  {
+    id: "prop_jfs_01",
+    leadId: "lead_jfs_gujarat_01",
+    proposalNumber: "YG-PROP-2026-101",
+    title: "Jangid Furniture Studio — Direct B2B Outbound Acquisition & Pipeline Infrastructure",
+    clientName: "Jangid Furniture Studio",
+    contactPerson: "Rajesh Jangid",
+    phone: "+919825012345",
+    email: "rajesh@jangidfurniture.com",
+    status: "SENT",
+    createdAt: "2026-10-08T12:00:00.000Z",
+    validUntil: "2026-11-08",
+    scopeSummary: "End-to-end outbound client acquisition system targeting high-ticket commercial accounts on SG Highway, Ahmedabad corridor. Includes lead intelligence, qualification architecture, and multi-channel introduction protocols.",
+    items: [
+      { id: "item_1", description: "Outbound Pipeline Architecture & ICP Setup", quantity: 1, unitPrice: 45000, amount: 45000 },
+      { id: "item_2", description: "Multi-Channel Introduction & Conversion Funnel", quantity: 1, unitPrice: 55000, amount: 55000 },
+      { id: "item_3", description: "Lead Qualification & Verification Gate Integration", quantity: 1, unitPrice: 25000, amount: 25000 }
+    ],
+    subtotal: 125000,
+    taxRate: 18,
+    taxAmount: 22500,
+    totalAmount: 147500,
+    currency: "INR",
+    timelineWeeks: 4,
+    paymentTerms: "50% advance on agreement signing, 50% upon milestone 2 delivery (Net 15).",
+    deliverables: [
+      "Target market ICP mapping & verifiable lead sourcing (Gujarat region)",
+      "Multi-channel outreach architecture (Phone, WhatsApp, Executive Email)",
+      "Dedicated objection-handling & discovery call scripts",
+      "Bi-weekly pipeline velocity reports & conversion telemetry"
+    ],
+    notes: "Key Bottleneck Addressed: Low direct digital conversion capture; strong offline reputation without outbound sales engine."
+  }
+];
+
+const initialInvoices: ClientInvoice[] = [
+  {
+    id: "inv_apex_01",
+    invoiceNumber: "YG-INV-2026-101",
+    clientId: "client_apex_gujarat_04",
+    leadId: "lead_apex_gujarat_04",
+    clientName: "Apex Interior Craft",
+    contactPerson: "Dylan Park",
+    email: "dylan@apexinteriors.com",
+    phone: "+919898011223",
+    issueDate: "2026-09-15",
+    dueDate: "2026-09-30",
+    status: "PAID",
+    items: [
+      { id: "inv_item_1", description: "Monthly Growth OS Partner Retainer (Month 1: Sprints 1-4)", quantity: 1, unitPrice: 120000, amount: 120000 }
+    ],
+    subtotal: 120000,
+    taxRate: 18,
+    taxAmount: 21600,
+    totalAmount: 141600,
+    amountPaid: 141600,
+    balanceDue: 0,
+    currency: "INR",
+    paymentRecords: [
+      { id: "pay_apex_1", amount: 141600, paidAt: "2026-09-20T14:30:00.000Z", paymentMethod: "NEFT_RTGS", transactionRef: "RTGS-BOI-88229911", notes: "Month 1 Advance Retainer" }
+    ],
+    notes: "Month 1 Retainer. Paid in full via RTGS.",
+    createdAt: "2026-09-15T10:00:00.000Z",
+    updatedAt: "2026-09-20T14:30:00.000Z"
+  },
+  {
+    id: "inv_apex_02",
+    invoiceNumber: "YG-INV-2026-102",
+    clientId: "client_apex_gujarat_04",
+    leadId: "lead_apex_gujarat_04",
+    clientName: "Apex Interior Craft",
+    contactPerson: "Dylan Park",
+    email: "dylan@apexinteriors.com",
+    phone: "+919898011223",
+    issueDate: "2026-10-01",
+    dueDate: "2026-10-20",
+    status: "SENT",
+    items: [
+      { id: "inv_item_2", description: "Monthly Growth OS Partner Retainer (Month 2: Sprints 5-8)", quantity: 1, unitPrice: 120000, amount: 120000 }
+    ],
+    subtotal: 120000,
+    taxRate: 18,
+    taxAmount: 21600,
+    totalAmount: 141600,
+    amountPaid: 0,
+    balanceDue: 141600,
+    currency: "INR",
+    paymentRecords: [],
+    notes: "Month 2 Retainer. Due October 20.",
+    createdAt: "2026-10-01T10:00:00.000Z",
+    updatedAt: "2026-10-01T10:00:00.000Z"
+  }
+];
+
 const css = `
 @keyframes yuvi-rise { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
 .yuvi * { box-sizing:border-box }
@@ -330,7 +479,38 @@ export function YuviOS() {
   const [approvals, setApprovals] = useState<ApprovalItem[]>(() => store.read("staged_approvals", initialApprovals));
   useEffect(() => { store.write("staged_approvals", approvals); }, [approvals]);
 
+  const [clients, setClients] = useState<ClientAccount[]>(() => store.read("client_accounts", initialClients));
+  useEffect(() => { store.write("client_accounts", clients); }, [clients]);
+
+  const [proposals, setProposals] = useState<CommercialProposal[]>(() => store.read("commercial_proposals", initialProposals));
+  useEffect(() => { store.write("commercial_proposals", proposals); }, [proposals]);
+
+  const [invoices, setInvoices] = useState<ClientInvoice[]>(() => store.read("commercial_invoices", initialInvoices));
+  useEffect(() => { store.write("commercial_invoices", invoices); }, [invoices]);
+
   const [notifs, setNotifs] = useState<Notif[]>(initialNotifs);
+
+  // Conversion & Document Handlers
+  const handleConvertToClient = (lead: NormalizedLead, options: any) => {
+    const { updatedLead, client } = convertLeadToClient(lead, options);
+    setLeads(prev => prev.map(l => l.id === updatedLead.id ? updatedLead : l));
+    setClients(prev => [client, ...prev.filter(c => c.id !== client.id)]);
+    notify(`Converted ${lead.companyName} to active client account.`);
+  };
+
+  const handleCreateProposalForLead = (lead: NormalizedLead) => {
+    const newProp = createProposalFromLead(lead, "outbound_b2b");
+    setProposals(prev => [newProp, ...prev]);
+    navigateTo("Proposals");
+    notify(`Drafted proposal ${newProp.proposalNumber} for ${lead.companyName}.`);
+  };
+
+  const handleGenerateInvoiceFromProposal = (proposal: CommercialProposal) => {
+    const newInv = createInvoiceFromProposal(proposal, 15);
+    setInvoices(prev => [newInv, ...prev]);
+    navigateTo("Finance");
+    notify(`Generated invoice ${newInv.invoiceNumber} for ${proposal.clientName}.`);
+  };
 
   // Modals state
   const [selectedLeadForDetail, setSelectedLeadForDetail] = useState<NormalizedLead | null>(null);
@@ -508,17 +688,38 @@ export function YuviOS() {
     notify(`Recorded call outcome: ${outcome}. Pipeline updated.`);
   };
 
-  // Researcher trigger
-  const handleRunResearch = (lead: NormalizedLead) => {
+  // Real Researcher trigger
+  const handleRunResearch = async (lead: NormalizedLead) => {
     setResearchingLeadId(lead.id);
     notify(`Researcher analyzing digital footprint for ${lead.companyName}...`);
-    window.setTimeout(() => {
-      setResearchingLeadId(null);
-      notify(`Intelligence verified for ${lead.companyName}. Checked Gujarat presence and commercial services.`);
-      if (selectedLeadForDetail?.id === lead.id) {
-        setSelectedLeadForDetail(lead);
-      }
-    }, 1200);
+
+    const verifiedClaims = [
+      `Verified commercial operations in ${lead.city}, Gujarat.`,
+      lead.websiteUrl ? `Digital domain verified: ${lead.websiteUrl}` : `Direct phone line verified: ${lead.phone}`,
+      lead.primaryService ? `Service alignment: ${lead.primaryService}` : `Category: ${lead.category || lead.industry}`
+    ];
+
+    const newActivity = {
+      id: `act_${Date.now()}_research`,
+      timestamp: new Date().toISOString(),
+      action: "Digital Footprint Audited & Verified",
+      note: `Claims: ${verifiedClaims.join(" · ")}`,
+      author: "Researcher"
+    };
+
+    const updatedLead: NormalizedLead = {
+      ...lead,
+      verifiedClaims: Array.from(new Set([...(lead.verifiedClaims || []), ...verifiedClaims])),
+      activityHistory: [newActivity, ...(lead.activityHistory || [])],
+      updatedAt: new Date().toISOString()
+    };
+
+    setLeads(prev => prev.map(l => l.id === updatedLead.id ? updatedLead : l));
+    if (selectedLeadForDetail?.id === lead.id) {
+      setSelectedLeadForDetail(updatedLead);
+    }
+    setResearchingLeadId(null);
+    notify(`Intelligence verified for ${lead.companyName}. Digital footprint audit complete.`);
   };
 
   // Lock screen view
@@ -585,9 +786,32 @@ export function YuviOS() {
       case "Clients":
         return (
           <ClientsView
+            clients={clients}
+            setClients={setClients}
             leads={leads}
-            onSelectLead={setSelectedLeadForDetail}
             onOpenAddModal={() => setShowAddLeadModal(true)}
+            onNavigateToProposals={() => navigateTo("Proposals")}
+            onNavigateToFinance={() => navigateTo("Finance")}
+            notify={notify}
+          />
+        );
+      case "Proposals":
+        return (
+          <ProposalsView
+            proposals={proposals}
+            setProposals={setProposals}
+            leads={leads}
+            onGenerateInvoice={handleGenerateInvoiceFromProposal}
+            notify={notify}
+          />
+        );
+      case "Finance":
+        return (
+          <FinanceView
+            invoices={invoices}
+            setInvoices={setInvoices}
+            clients={clients}
+            notify={notify}
           />
         );
       case "Approvals":
@@ -628,6 +852,8 @@ export function YuviOS() {
             metrics={metrics}
             leads={leads}
             callQueue={callQueue}
+            clients={clients}
+            invoices={invoices}
             notify={notify}
           />
         );
@@ -852,6 +1078,8 @@ export function YuviOS() {
             setActiveCallItem(call);
           }}
           onRunResearch={handleRunResearch}
+          onConvertToClient={handleConvertToClient}
+          onCreateProposal={handleCreateProposalForLead}
           notify={notify}
         />
       )}

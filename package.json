@@ -11,10 +11,11 @@
     "dev:ui": "pnpm --filter @workspace/mockup-sandbox run dev",
     "dev:api": "pnpm --filter @workspace/api-server run dev",
     "start:api": "pnpm --filter @workspace/api-server run start",
-    "test": "pnpm --filter @workspace/scripts run test:sales && pnpm --filter @workspace/scripts run test:sprint3 && pnpm --filter @workspace/scripts run test:groq",
+    "test": "pnpm --filter @workspace/scripts run test:sales && pnpm --filter @workspace/scripts run test:sprint3 && pnpm --filter @workspace/scripts run test:groq && pnpm --filter @workspace/scripts run test:crm-finance",
     "test:sales": "pnpm --filter @workspace/scripts run test:sales",
     "test:sprint3": "pnpm --filter @workspace/scripts run test:sprint3",
-    "test:groq": "pnpm --filter @workspace/scripts run test:groq"
+    "test:groq": "pnpm --filter @workspace/scripts run test:groq",
+    "test:crm-finance": "pnpm --filter @workspace/scripts run test:crm-finance"
   },
   "private": true,
   "dependencies": {

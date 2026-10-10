@@ -11,6 +11,8 @@ export type View =
   | "Leads"
   | "Pipeline"
   | "Clients"
+  | "Proposals"
+  | "Finance"
   | "Knowledge Base"
   | "Reports"
   | "Settings";
