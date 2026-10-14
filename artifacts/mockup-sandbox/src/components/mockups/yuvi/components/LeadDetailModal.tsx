@@ -6,14 +6,22 @@ import {
   X, Phone, MessageCircle, Mail, Globe, MapPin, Calendar, Clock,
   CheckCircle2, Plus, Trash2, Sparkles, Send, Building2, User,
   FileText, CheckSquare, History, ExternalLink, ArrowRight, UserCheck,
-  Presentation, AlertTriangle, ShieldCheck, Zap, Instagram, Eye
+  Presentation, AlertTriangle, ShieldCheck, Zap, Instagram, Eye, Copy
 } from "lucide-react";
 import { auditLead, runMultiSourceResearch } from "../lib/research/leadResearcher";
-import { generateHunterPitch, recordWhatsAppDispatch, generateWhatsAppDeepLink } from "../lib/outreach/hunterOutreach";
+import { generateHunterPitch, recordWhatsAppDispatch, generateWhatsAppDeepLink, formatWhatsAppPhone } from "../lib/outreach/hunterOutreach";
 import { generateClientPitchDeck } from "../lib/export/presentationBuilder";
 import { SocialSnapshotModal } from "./SocialSnapshotModal";
 import type { EvidenceItem, SocialSnapshot } from "../lib/research/evidenceModel";
 import { synthesizeResearchEvidence } from "../lib/research/evidenceModel";
+import {
+  confirmMarkAsSent,
+  logProspectReply,
+  buildDispatchLink,
+  type CadenceStep,
+  type ReplyClassification,
+} from "../lib/outreach/cadenceEngine";
+import { OBJECTION_BANK, getObjectionScript, type ObjectionCategory } from "../lib/outreach/objectionBank";
 
 interface LeadDetailModalProps {
   lead: NormalizedLead;
@@ -40,6 +48,12 @@ export function LeadDetailModal({
 }: LeadDetailModalProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "evidence" | "notes" | "tasks" | "outreach" | "activity">("overview");
   const [showSocialModal, setShowSocialModal] = useState(false);
+  const [showSendConfirm, setShowSendConfirm] = useState(false);
+  const [showReplyModal, setShowReplyModal] = useState(false);
+  const [replyType, setReplyType] = useState<ReplyClassification>("INTERESTED");
+  const [replyNotes, setReplyNotes] = useState("");
+  const [callbackDate, setCallbackDate] = useState(() => new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0]);
+  const [selectedObjection, setSelectedObjection] = useState<ObjectionCategory | null>(null);
 
   // Editable fields
   const [companyName, setCompanyName] = useState(lead.companyName);
@@ -117,10 +131,30 @@ export function LeadDetailModal({
       return;
     }
     const pitch = lead.outreachDrafts?.whatsapp || generateHunterPitch(lead).whatsappPitch;
-    const { updatedLead, deepLink } = recordWhatsAppDispatch(lead, pitch);
-    onUpdateLead(updatedLead);
+    const deepLink = buildDispatchLink(lead.phone, pitch);
     window.open(deepLink, "_blank");
-    notify(`Dispatched WhatsApp message via wa.me & logged in activity history.`);
+    setShowSendConfirm(true);
+    notify(`Opened WhatsApp for ${lead.companyName}. Confirm below after sending.`);
+  };
+
+  const handleConfirmSent = () => {
+    const { updatedLead, nextStep } = confirmMarkAsSent(lead, "D0");
+    onUpdateLead(updatedLead);
+    setShowSendConfirm(false);
+    notify(`Marked as Sent! Lead moved to CONTACTED. Cadence step ${nextStep} scheduled.`);
+  };
+
+  const handleSaveReply = (e: FormEvent) => {
+    e.preventDefault();
+    const { updatedLead } = logProspectReply(lead, {
+      classification: replyType,
+      messageText: replyNotes,
+      callbackDate: replyType === "LATER" ? callbackDate : undefined,
+    });
+    onUpdateLead(updatedLead);
+    setShowReplyModal(false);
+    setReplyNotes("");
+    notify(`Logged reply: ${replyType}. Lead moved to ${updatedLead.status}.`);
   };
 
   const handleBuildPitchDeck = async () => {
@@ -310,6 +344,15 @@ export function LeadDetailModal({
                 >
                   <MessageCircle size={13} /> 1-Click WhatsApp
                 </button>
+                {lead.status === "CONTACTED" && (
+                  <button
+                    type="button"
+                    onClick={() => setShowReplyModal(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-purple-400/40 bg-purple-500/20 px-3 py-1.5 text-xs font-semibold text-purple-200 hover:bg-purple-500/30 transition-all shadow-[0_0_10px_rgba(168,85,247,0.2)]"
+                  >
+                    <CheckSquare size={13} /> Log Reply
+                  </button>
+                )}
               </>
             )}
             {lead.email && (
@@ -948,6 +991,86 @@ export function LeadDetailModal({
                   </div>
                 </div>
               )}
+
+              {/* Multi-Touch Cadence Tracker */}
+              <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-bold text-slate-300 tracking-wider">
+                    Outreach Cadence Progression (D0 → D2 → D5)
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    Stop-on-Reply Active
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className={`p-2.5 rounded-lg border text-center ${
+                    lead.status === "CONTACTED" || lead.status === "INTERESTED" || lead.status === "QUALIFIED"
+                      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                      : "border-white/10 bg-black/40 text-slate-400"
+                  }`}>
+                    <div className="font-bold">D0 Touch</div>
+                    <div className="text-[10px] mt-0.5">{lead.status !== "NEW" ? "Dispatched" : "Pending Send"}</div>
+                  </div>
+                  <div className="p-2.5 rounded-lg border border-white/10 bg-black/40 text-center text-slate-400">
+                    <div className="font-bold">D2 Nudge</div>
+                    <div className="text-[10px] mt-0.5">+48 Hours</div>
+                  </div>
+                  <div className="p-2.5 rounded-lg border border-white/10 bg-black/40 text-center text-slate-400">
+                    <div className="font-bold">D5 Breakup</div>
+                    <div className="text-[10px] mt-0.5">+72 Hours</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Indian B2B Objection Bank */}
+              <div className="rounded-xl border border-amber-500/20 bg-amber-950/10 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <ShieldCheck size={14} /> Indian B2B Objection Bank (Tested Gujarat Scripts)
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">1-Click Copy</span>
+                </div>
+
+                <div className="space-y-2">
+                  {(Object.keys(OBJECTION_BANK) as ObjectionCategory[]).map((key) => {
+                    const item = OBJECTION_BANK[key];
+                    const script = getObjectionScript(key, lead);
+                    const isExpanded = selectedObjection === key;
+                    return (
+                      <div key={key} className="rounded-lg border border-white/10 bg-black/30 overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedObjection(isExpanded ? null : key)}
+                          className="w-full flex items-center justify-between p-2.5 text-xs text-left font-medium text-slate-200 hover:bg-white/5"
+                        >
+                          <span>{item.title}</span>
+                          <span className="text-[10px] font-mono text-amber-400">{isExpanded ? "▲ Hide" : "▼ View"}</span>
+                        </button>
+                        {isExpanded && (
+                          <div className="p-3 bg-black/50 border-t border-white/5 space-y-2 text-xs">
+                            <div className="text-[11px] text-slate-400 italic">"{item.clientObjection}"</div>
+                            <div className="p-2 rounded bg-black/40 border border-white/5 font-mono text-[11px] text-amber-100 leading-relaxed">
+                              {script}
+                            </div>
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(script);
+                                  notify(`Copied response for "${item.title}"!`);
+                                }}
+                                className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-300 hover:underline"
+                              >
+                                <Copy size={11} /> Copy Script
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
 
@@ -1053,6 +1176,88 @@ export function LeadDetailModal({
             onSave={handleSaveSocialSnapshot}
             onClose={() => setShowSocialModal(false)}
           />
+        )}
+
+        {/* HUMAN SEND CONFIRMATION MODAL (TRUTH GUARDRAIL) */}
+        {showSendConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4" onClick={e => e.stopPropagation()}>
+            <div className="w-full max-w-md rounded-2xl border border-emerald-500/30 bg-[#0d0f22] p-6 shadow-2xl text-left space-y-4">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <MessageCircle className="text-emerald-400" size={18} /> Confirm Outreach Dispatch
+              </h3>
+              <p className="text-xs text-slate-300">
+                Did you send the outreach message to <b>{lead.contactPerson || lead.companyName}</b> on WhatsApp?
+              </p>
+              <div className="rounded-lg bg-black/40 border border-white/10 p-3 text-xs font-mono text-slate-300">
+                Recipient: +91 {formatWhatsAppPhone(lead.phone).slice(2)} · {lead.companyName}
+              </div>
+              <p className="text-[11px] text-slate-400 italic">
+                * Truth Guardrail: Only confirming 'Yes' will mark this lead as CONTACTED and schedule the D2 follow-up.
+              </p>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button onClick={() => setShowSendConfirm(false)}>No / Cancelled</Button>
+                <Button variant="success" onClick={handleConfirmSent}>
+                  <CheckCircle2 size={13} /> Yes, Mark as Sent
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STRUCTURED REPLY LOGGER MODAL */}
+        {showReplyModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4" onClick={e => e.stopPropagation()}>
+            <div className="w-full max-w-md rounded-2xl border border-purple-500/30 bg-[#0d0f22] p-6 shadow-2xl text-left space-y-4">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <CheckSquare className="text-purple-400" size={18} /> Log Prospect Reply
+              </h3>
+              <form onSubmit={handleSaveReply} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-slate-300">Reply Classification</label>
+                  <select
+                    value={replyType}
+                    onChange={e => setReplyType(e.target.value as ReplyClassification)}
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-white outline-none"
+                  >
+                    <option value="INTERESTED">INTERESTED — Wants Roadmap / Proposal</option>
+                    <option value="LATER">LATER — Call Back Later</option>
+                    <option value="NO">NO — Not Interested / Passing</option>
+                    <option value="WRONG_NUMBER">WRONG_NUMBER — Incorrect Phone / Contact</option>
+                    <option value="OPT_OUT">OPT_OUT — Do Not Contact / Stop Messages</option>
+                  </select>
+                </div>
+
+                {replyType === "LATER" && (
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-slate-300">Scheduled Callback Date</label>
+                    <input
+                      type="date"
+                      value={callbackDate}
+                      onChange={e => setCallbackDate(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-white outline-none font-mono"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-slate-300">Prospect Response / Notes</label>
+                  <textarea
+                    value={replyNotes}
+                    onChange={e => setReplyNotes(e.target.value)}
+                    placeholder="Enter what the prospect said on WhatsApp or phone..."
+                    className="mt-1 w-full h-20 rounded-lg border border-white/10 bg-black/40 p-2.5 text-xs text-white outline-none resize-none"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button onClick={() => setShowReplyModal(false)}>Cancel</Button>
+                  <Button variant="primary" type="submit">
+                    Save & Update Status
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
         )}
       </div>
     </div>

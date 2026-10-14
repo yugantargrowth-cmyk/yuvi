@@ -4,8 +4,9 @@ import type { LeadTier, NormalizedLead } from "../lib/types/sales";
 import { Button, Panel, TierPill, StatusPill, ViewHeading } from "./ui";
 import {
   ShieldCheck, CheckCircle2, XCircle, Edit3, MessageCircle,
-  Mail, Send, ExternalLink, Check, Save
+  Mail, Send, ExternalLink, Check, Save, Clock, AlertTriangle
 } from "lucide-react";
+import { isWithinSendingWindow, canSendToday, confirmMarkAsSent } from "../lib/outreach/cadenceEngine";
 
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "PUBLISHED / COMPLETED";
 
@@ -44,6 +45,7 @@ export function ApprovalsView({
   const [selectedId, setSelectedId] = useState<string | null>(approvals[0]?.id || null);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const shown = approvals.filter(a => filter === "ALL" || a.status === filter);
   const selected = approvals.find(a => a.id === selectedId) || shown[0];
@@ -57,6 +59,23 @@ export function ApprovalsView({
     setApprovals(approvals.map(a => (a.id === id ? { ...a, exactMessage: editText, status: "APPROVED" } : a)));
     setIsEditing(false);
     notify("Staged copy updated and marked as APPROVED.");
+  };
+
+  const handleConfirmSent = (item: ApprovalItem) => {
+    updateStatus(item.id, "PUBLISHED / COMPLETED");
+    if (leads && setLeads && item.leadId) {
+      const targetLead = leads.find(l => l.id === item.leadId);
+      if (targetLead) {
+        const { updatedLead } = confirmMarkAsSent(
+          targetLead,
+          "D0",
+          `Approved dispatch via Gate: "${item.exactMessage?.slice(0, 100)}..."`
+        );
+        setLeads(leads.map(l => (l.id === item.leadId ? updatedLead : l)));
+      }
+    }
+    setShowConfirmDialog(false);
+    notify("Sent confirmed! Status updated and cadence step advanced to D2.");
   };
 
   const cleanPhone = selected?.phone ? selected.phone.replace(/[^0-9]/g, "") : "";
@@ -86,10 +105,48 @@ export function ApprovalsView({
         }
       />
 
-      <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-4 text-xs text-amber-200 flex items-start gap-3">
-        <ShieldCheck size={18} className="shrink-0 mt-0.5 text-amber-300" />
-        <div>
-          <b>Safe Sending Policy Enforced:</b> No external WhatsApp, email, or SMS messages are dispatched autonomously. Review copy, edit freely, and approve or send directly below.
+      {/* Sending Policy & Budget Bar */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className={`rounded-xl border p-4 text-xs flex items-center justify-between ${
+          canSendToday(approvals.filter(a => a.status === "PUBLISHED / COMPLETED").length).allowed
+            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+            : "border-red-500/30 bg-red-500/10 text-red-200"
+        }`}>
+          <div className="flex items-center gap-2.5">
+            <Send size={16} className="text-emerald-400" />
+            <div>
+              <div className="font-bold uppercase tracking-wider text-[10px]">Daily Outbound Budget</div>
+              <div className="text-sm font-extrabold font-mono text-white">
+                {approvals.filter(a => a.status === "PUBLISHED / COMPLETED").length} / 30 Sent Today
+              </div>
+            </div>
+          </div>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-emerald-400/30 bg-emerald-400/20 text-emerald-300 font-bold">
+            {canSendToday(approvals.filter(a => a.status === "PUBLISHED / COMPLETED").length).remaining} Remaining
+          </span>
+        </div>
+
+        <div className={`rounded-xl border p-4 text-xs flex items-center justify-between ${
+          isWithinSendingWindow().inWindow
+            ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-200"
+            : "border-amber-500/30 bg-amber-500/10 text-amber-200"
+        }`}>
+          <div className="flex items-center gap-2.5">
+            <Clock size={16} className="text-cyan-400" />
+            <div>
+              <div className="font-bold uppercase tracking-wider text-[10px]">Active Sending Window</div>
+              <div className="text-sm font-extrabold font-mono text-white">
+                09:30 – 19:30 IST ({isWithinSendingWindow().istTimeString})
+              </div>
+            </div>
+          </div>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded border font-bold ${
+            isWithinSendingWindow().inWindow
+              ? "border-cyan-400/30 bg-cyan-400/20 text-cyan-300"
+              : "border-amber-400/30 bg-amber-400/20 text-amber-300"
+          }`}>
+            {isWithinSendingWindow().inWindow ? "Active" : "Outside Window"}
+          </span>
         </div>
       </div>
 
@@ -212,43 +269,49 @@ export function ApprovalsView({
                   </div>
 
                   {whatsappUrl && (
-                    <a
-                      href={whatsappUrl}
-                      target="_blank"
-                      rel="noreferrer"
+                    <button
+                      type="button"
                       onClick={() => {
-                        updateStatus(selected.id, "PUBLISHED / COMPLETED");
-                        if (leads && setLeads && selected.leadId) {
-                          setLeads(leads.map(l => {
-                            if (l.id === selected.leadId) {
-                              const act = {
-                                id: `act_wa_${Date.now()}`,
-                                timestamp: new Date().toISOString(),
-                                action: "WhatsApp Pitch Dispatched (Approved via Gate)",
-                                note: `Hunter copy sent: "${selected.exactMessage?.slice(0, 100)}..."`,
-                                author: "Hunter",
-                              };
-                              return {
-                                ...l,
-                                status: l.status === "NEW" ? "CONTACTED" : l.status,
-                                lastContact: new Date().toISOString(),
-                                activityHistory: [act, ...(l.activityHistory || [])],
-                              };
-                            }
-                            return l;
-                          }));
-                        }
+                        window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+                        setShowConfirmDialog(true);
                       }}
-                      className="flex items-center justify-center gap-2 rounded-lg bg-emerald-500 py-2.5 text-xs font-bold text-black hover:bg-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all"
+                      className="w-full flex items-center justify-center gap-2 rounded-lg bg-emerald-500 py-2.5 text-xs font-bold text-black hover:bg-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all cursor-pointer"
                     >
-                      <MessageCircle size={15} /> Open & Send via WhatsApp Web
-                    </a>
+                      <MessageCircle size={15} /> Open WhatsApp Web Draft
+                    </button>
+                  )}
+
+                  {showConfirmDialog && (
+                    <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3.5 space-y-2.5 text-xs text-amber-200">
+                      <div className="flex items-center gap-2 font-bold text-amber-300">
+                        <AlertTriangle size={15} /> Did you actually click Send in WhatsApp?
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        Opening WhatsApp does <b>NOT</b> send the message. Please hit Send in WhatsApp Web, then click below to verify sent status and advance cadence to D2.
+                      </p>
+                      <div className="flex gap-2 pt-1">
+                        <Button
+                          variant="primary"
+                          className="flex-1 !bg-emerald-500 !text-black font-bold"
+                          onClick={() => handleConfirmSent(selected)}
+                        >
+                          <CheckCircle2 size={13} /> Yes, Mark as Sent
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          className="flex-1"
+                          onClick={() => setShowConfirmDialog(false)}
+                        >
+                          Not Sent Yet
+                        </Button>
+                      </div>
+                    </div>
                   )}
 
                   {selected.email && (
                     <a
                       href={`mailto:${selected.email}?subject=${encodeURIComponent(`Growth Strategy for ${selected.title}`)}&body=${encodeURIComponent(selected.exactMessage || "")}`}
-                      onClick={() => updateStatus(selected.id, "PUBLISHED / COMPLETED")}
+                      onClick={() => handleConfirmSent(selected)}
                       className="flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-semibold text-white hover:bg-white/10"
                     >
                       <Mail size={15} /> Send via Email Client
@@ -256,10 +319,10 @@ export function ApprovalsView({
                   )}
 
                   <Button
-                    onClick={() => updateStatus(selected.id, "PUBLISHED / COMPLETED")}
+                    onClick={() => handleConfirmSent(selected)}
                     className="w-full"
                   >
-                    <CheckCircle2 size={13} /> Mark Sent Manually
+                    <CheckCircle2 size={13} /> Mark Sent Manually (Direct)
                   </Button>
                 </div>
               </div>

@@ -4,11 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "tsx ./src/test-supabase-rls.ts && tsx ./src/test-phase1-lead-factory.ts && tsx ./src/test-phase2-research-pipeline.ts && tsx ./src/test-phase3-proposals.ts && tsx ./src/test-sales-engine.ts && tsx ./src/test-sprint3-verification.ts && tsx ./src/test-groq-security.ts && tsx ./src/test-crm-delivery-finance.ts && tsx ./src/test-autonomous-sprints.ts",
+    "test": "tsx ./src/test-supabase-rls.ts && tsx ./src/test-phase1-lead-factory.ts && tsx ./src/test-phase2-research-pipeline.ts && tsx ./src/test-phase3-proposals.ts && tsx ./src/test-phase4-outreach.ts && tsx ./src/test-sales-engine.ts && tsx ./src/test-sprint3-verification.ts && tsx ./src/test-groq-security.ts && tsx ./src/test-crm-delivery-finance.ts && tsx ./src/test-autonomous-sprints.ts",
     "test:p0-rls": "tsx ./src/test-supabase-rls.ts",
     "test:p1-lead-factory": "tsx ./src/test-phase1-lead-factory.ts",
     "test:p2-research": "tsx ./src/test-phase2-research-pipeline.ts",
     "test:p3-proposals": "tsx ./src/test-phase3-proposals.ts",
+    "test:p4-outreach": "tsx ./src/test-phase4-outreach.ts",
     "test:sales": "tsx ./src/test-sales-engine.ts",
     "test:sprint3": "tsx ./src/test-sprint3-verification.ts",
     "test:groq": "tsx ./src/test-groq-security.ts",

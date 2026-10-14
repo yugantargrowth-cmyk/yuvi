@@ -64,6 +64,7 @@ export type LeadStatus =
   | "PROPOSAL"
   | "REPLIED"
   | "INTERESTED"
+  | "MEETING_SCHEDULED"
   | "NOT_INTERESTED"
   | "CALLBACK"
   | "WON"
@@ -145,6 +146,10 @@ export interface NormalizedLead {
   triage?: LeadTriage;
   researchEvidence?: import("../research/evidenceModel").EvidenceItem[];
   socialSnapshot?: import("../research/evidenceModel").SocialSnapshot;
+  // Phase 4 Outreach Cadence Additions
+  followUpDate?: string;
+  cadenceStep?: string;
+  nextCadenceDate?: string;
 }
 
 export interface LeadTriage {
