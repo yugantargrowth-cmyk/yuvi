@@ -188,7 +188,131 @@ assert(audited.researchEvidence !== undefined && audited.researchEvidence.length
 assert(Boolean(audited.researchEvidence && audited.researchEvidence.every(e => e.label === "VERIFIED" || e.label === "OBSERVED")), "All attached evidence items are VERIFIED or OBSERVED");
 assert(audited.commercialLeaks !== undefined && audited.commercialLeaks.length > 0, "Identified specific commercial leaks for architecture niche");
 
+// --- 5. Research Jobs Queue & Vercel Cron Worker Verification ---
+console.log("\n5. Research Jobs Queue & Vercel Cron Worker (CRON_SECRET Secured)");
+
+import {
+  enqueueResearchJobs,
+  getNextQueuedJobs,
+  updateJobStatus,
+  type ResearchJob,
+} from "../../artifacts/mockup-sandbox/src/components/mockups/yuvi/lib/research/researchQueue.js";
+import cronHandlerRaw from "../../api/cron/research.js";
+const cronHandler = typeof cronHandlerRaw === "function" ? cronHandlerRaw : (cronHandlerRaw as any).default;
+
+
+const lead1: NormalizedLead = {
+  id: "lead-q1",
+  companyName: "Karnavati Dental Care",
+  phone: "919825100001",
+  websiteUrl: "https://karnavatidental.in",
+  city: "Ahmedabad",
+  state: "Gujarat",
+  country: "India",
+  status: "NEW",
+  score: 80,
+  tier: "A",
+  rawRecord: {},
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  recommendedChannel: "WHATSAPP",
+};
+
+const lead2: NormalizedLead = {
+  id: "lead-q2",
+  companyName: "Gujarat Brass Forge",
+  phone: "919825100002",
+  websiteUrl: "https://gujaratbrass.com",
+  city: "Jamnagar",
+  state: "Gujarat",
+  country: "India",
+  status: "NEW",
+  score: 85,
+  tier: "A",
+  rawRecord: {},
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  recommendedChannel: "WHATSAPP",
+};
+
+// Queue operations test
+const queuedJobs = enqueueResearchJobs([lead1, lead2]);
+assert(queuedJobs.length >= 2, "Enqueued leads into research_jobs queue");
+
+const nextBatch = getNextQueuedJobs(5);
+assert(nextBatch.length >= 2 && nextBatch.length <= 5, "Retrieved next batch of 3-5 queued leads");
+assert(nextBatch.every((j) => j.status === "QUEUED"), "All retrieved jobs have status QUEUED");
+
+const runningJob = updateJobStatus(nextBatch[0].id, "RUNNING");
+assert(runningJob !== null && runningJob.status === "RUNNING", "Updated job status to RUNNING");
+assert(runningJob?.started_at !== undefined, "Job records started_at timestamp");
+
+const doneJob = updateJobStatus(nextBatch[0].id, "DONE", { evidenceCount: 3 });
+assert(doneJob !== null && doneJob.status === "DONE", "Updated job status to DONE");
+assert(doneJob?.finished_at !== undefined, "Job records finished_at timestamp");
+assert(doneJob?.evidenceCount === 3, "Job records completed evidenceCount");
+
+// Cron route security test
+process.env.CRON_SECRET = "secret_cron_token_test_123";
+
+// Helper to mock request/response
+function createMockReqRes(headers: Record<string, string>, body?: any) {
+  let statusCode = 200;
+  let responseData: any = null;
+  const req: any = {
+    method: "POST",
+    headers,
+    body,
+  };
+  const res: any = {
+    statusCode: 200,
+    setHeader: () => {},
+    status: (code: number) => {
+      statusCode = code;
+      res.statusCode = code;
+      return res;
+    },
+    json: (data: any) => {
+      responseData = data;
+      return res;
+    },
+    end: (data?: any) => {
+      if (data && typeof data === "string") {
+        try { responseData = JSON.parse(data); } catch { responseData = data; }
+      }
+    },
+  };
+  return { req, res, getStatusCode: () => statusCode, getResponseData: () => responseData };
+}
+
+// 1. Missing secret should be rejected with 401
+const unauth = createMockReqRes({});
+await cronHandler(unauth.req, unauth.res);
+assert(unauth.getStatusCode() === 401, "Cron route rejects unauthenticated request with 401 Unauthorized");
+assert(unauth.getResponseData()?.ok === false, "Unauthenticated response payload has ok=false");
+
+// 2. Invalid secret should be rejected with 401
+const badAuth = createMockReqRes({ authorization: "Bearer invalid_secret_123" });
+await cronHandler(badAuth.req, badAuth.res);
+assert(badAuth.getStatusCode() === 401, "Cron route rejects invalid CRON_SECRET with 401");
+
+// 3. Authorized request succeeds and processes 3-5 queued leads
+const validAuth = createMockReqRes(
+  { authorization: "Bearer secret_cron_token_test_123" },
+  { leads: [lead1, lead2], limit: 5 }
+);
+await cronHandler(validAuth.req, validAuth.res);
+assert(validAuth.getStatusCode() === 200, "Cron route accepts valid CRON_SECRET with 200 OK");
+const cronData = validAuth.getResponseData();
+assert(cronData?.ok === true, "Authorized cron execution returns ok=true");
+assert(cronData?.processedCount === 2, "Cron worker processes exactly 2 queued leads");
+assert(cronData?.batchLimit === 5, "Cron batch limit is capped at 5");
+assert(cronData?.jobs?.[0]?.status === "DONE", "Cron job completes with status DONE");
+assert(cronData?.jobs?.[0]?.evidence?.length >= 3, "Cron job attaches at least 3 verified evidence items");
+assert(cronData?.jobs?.[0]?.evidence?.every((e: any) => e.label === "VERIFIED"), "Cron evidence is strictly labeled VERIFIED");
+
 console.log(`\n=== PHASE 2 SUITE COMPLETE: ${passed} passed, ${failed} failed ===`);
 if (failed > 0) {
   process.exit(1);
 }
+

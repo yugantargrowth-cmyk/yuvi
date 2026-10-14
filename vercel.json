@@ -2,6 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "pnpm run build",
   "outputDirectory": "artifacts/mockup-sandbox/dist",
+  "crons": [
+    {
+      "path": "/api/cron/research",
+      "schedule": "*/10 * * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/((?!api/|api$).*)",

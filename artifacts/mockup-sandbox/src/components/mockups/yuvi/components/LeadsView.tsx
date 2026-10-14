@@ -11,6 +11,8 @@ import {
 import { parseLeadSheet, getCSVPreview, deduplicateLeads } from "../lib/sales/csvParser";
 import { triageLeadsBatch } from "../lib/sales/leadTriageEngine";
 import { syncLeadsWithSupabase } from "../lib/supabaseClient";
+import { executeResearchOnSelected, type ResearchBatchProgress } from "../lib/research/researchQueue";
+
 
 interface LeadsViewProps {
   leads: NormalizedLead[];
@@ -80,6 +82,12 @@ export function LeadsView({
 
   // Top N Research Selector
   const [topNCount, setTopNCount] = useState(100);
+
+  // Batch Research on Selected Leads State
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [batchResearching, setBatchResearching] = useState(false);
+  const [researchProgress, setResearchProgress] = useState<ResearchBatchProgress | null>(null);
+
 
   // Extract unique cities
   const uniqueCities = Array.from(new Set(leads.map(l => l.city).filter(Boolean)));
@@ -159,11 +167,68 @@ export function LeadsView({
     }
   };
 
+  const toggleSelectLead = (id: string) => {
+    setSelectedLeadIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedLeadIds(new Set(filtered.map((l) => l.id)));
+    } else {
+      setSelectedLeadIds(new Set());
+    }
+  };
+
+  const handleRunResearchOnSelected = async () => {
+    let targets = leads.filter((l) => selectedLeadIds.has(l.id));
+    if (targets.length === 0) {
+      const qualified = filtered.filter((l) => l.triage?.decision !== "skip");
+      targets = (qualified.length > 0 ? qualified : filtered).slice(0, 10);
+      if (targets.length === 0) {
+        notify("No leads available to research. Import a CSV first.");
+        return;
+      }
+      setSelectedLeadIds(new Set(targets.map((l) => l.id)));
+    }
+
+    setBatchResearching(true);
+    notify(`Starting automated research batch for ${targets.length} selected leads...`);
+
+    try {
+      const { updatedLeads, completedJobs } = await executeResearchOnSelected(
+        targets,
+        (progress) => setResearchProgress(progress)
+      );
+
+      const leadMap = new Map(leads.map((l) => [l.id, l]));
+      for (const updated of updatedLeads) {
+        leadMap.set(updated.id, updated);
+      }
+      setLeads(Array.from(leadMap.values()));
+
+      notify(
+        `Research complete: Processed ${completedJobs.length} leads. Evidence synthesized and attached to radar.`
+      );
+    } catch (err: any) {
+      notify(`Research batch error: ${err?.message || String(err)}`);
+    } finally {
+      setBatchResearching(false);
+      setResearchProgress(null);
+    }
+  };
+
   const handleSelectTopN = () => {
-    const qualifiedOrMaybe = leads.filter(l => l.triage?.decision !== "skip");
+    const qualifiedOrMaybe = leads.filter((l) => l.triage?.decision !== "skip");
     const topSelection = qualifiedOrMaybe.slice(0, topNCount);
+    setSelectedLeadIds(new Set(topSelection.map((l) => l.id)));
     notify(`Selected top ${topSelection.length} qualified leads for Phase 2 research pipeline.`);
   };
+
 
   const handleRunTriageAll = () => {
     if (leads.length === 0) {
@@ -240,12 +305,21 @@ export function LeadsView({
             <Button onClick={() => fileInputRef.current?.click()} variant="primary">
               <UploadCloud size={14} /> Import CSV Wizard
             </Button>
+            <Button
+              onClick={handleRunResearchOnSelected}
+              disabled={batchResearching}
+              className="border-orange-500/40 bg-orange-600/20 text-orange-200 hover:bg-orange-600/30"
+            >
+              <Sparkles size={14} className={batchResearching ? "animate-spin" : ""} />
+              Run research on selected {selectedLeadIds.size > 0 ? `(${selectedLeadIds.size})` : ""}
+            </Button>
             <Button onClick={handleRunTriageAll}>
               <Filter size={14} /> Re-Triage Pipeline
             </Button>
             <Button onClick={handleSelectTopN}>
               <ListOrdered size={14} /> Top {topNCount} for Research
             </Button>
+
             <Button onClick={handleExportCSV}>
               <Download size={14} /> Export CSV
             </Button>
@@ -515,6 +589,14 @@ export function LeadsView({
           <table className="w-full min-w-[1000px] text-left">
             <thead className="border-b border-white/5 bg-black/20 text-[10px] uppercase tracking-wider text-slate-400">
               <tr>
+                <th className="px-3 py-3 w-8">
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selectedLeadIds.size === filtered.length}
+                    onChange={(e) => toggleSelectAll(e.target.checked)}
+                    className="rounded border-white/20 bg-black/40 text-orange-500 focus:ring-0 cursor-pointer"
+                  />
+                </th>
                 <th className="px-4 py-3 font-semibold">Rank & Company</th>
                 <th className="px-4 py-3 font-semibold">Triage Decision & Score</th>
                 <th className="px-4 py-3 font-semibold">Explainable Reasons</th>
@@ -526,7 +608,7 @@ export function LeadsView({
             <tbody className="divide-y divide-white/5">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-xs text-slate-500">
+                  <td colSpan={7} className="py-12 text-center text-xs text-slate-500">
                     No leads matching your search criteria. Click &quot;Import CSV Wizard&quot; to ingest leads.
                   </td>
                 </tr>
@@ -540,8 +622,17 @@ export function LeadsView({
                       onClick={() => onSelectLead(l)}
                       className="cursor-pointer hover:bg-white/[.025] transition-colors group"
                     >
+                      <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedLeadIds.has(l.id)}
+                          onChange={() => toggleSelectLead(l.id)}
+                          className="rounded border-white/20 bg-black/40 text-orange-500 focus:ring-0 cursor-pointer"
+                        />
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
+
                           <span className="font-mono text-[10px] font-bold text-slate-500 w-5">
                             #{index + 1}
                           </span>
@@ -662,6 +753,50 @@ export function LeadsView({
           </table>
         </div>
       </Panel>
+
+      {/* Batch Research Progress Modal */}
+      {researchProgress && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border border-orange-500/30 bg-zinc-950 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <Sparkles size={18} className="text-orange-400 animate-spin" />
+                <h3 className="text-sm font-bold text-white">Running Research on Selected Leads</h3>
+              </div>
+              <span className="font-mono text-xs font-bold text-orange-400">
+                {researchProgress.percent}%
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-300">
+                <span>Processing lead {researchProgress.current} of {researchProgress.total}</span>
+                <span className="font-mono text-[11px] text-slate-400">
+                  {researchProgress.current}/{researchProgress.total}
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full bg-gradient-to-r from-orange-500 to-amber-400 transition-all duration-300"
+                  style={{ width: `${researchProgress.percent}%` }}
+                />
+              </div>
+
+              <div className="rounded-lg border border-white/5 bg-black/40 p-3 text-xs">
+                <div className="text-[10px] uppercase text-slate-500">Currently Auditing:</div>
+                <div className="mt-0.5 font-semibold text-white truncate">{researchProgress.leadName}</div>
+                <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-400">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Fetching server scan, mobile viewport & tracking signals...
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
