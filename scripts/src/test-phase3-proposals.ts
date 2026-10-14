@@ -164,28 +164,39 @@ const analysis = analyzeLeadNeeds(researchedLead);
 assert(analysis.topLeaks.length === 3, `Selected exactly top 3 commercial leaks (Got: ${analysis.topLeaks.length})`);
 assert(analysis.topLeaks.every(l => l.evidenceId.startsWith("ev-")), "Every top leak is linked to a discrete evidence ID");
 assert(analysis.topLeaks.every(l => l.label === "VERIFIED" || l.label === "OBSERVED"), "All top leaks are VERIFIED or OBSERVED");
-assert(analysis.prescribedPackage.packageId === "web_sprint_48h", "Prescribes 48-Hour Web Sprint for load latency & WhatsApp gap");
-assert(analysis.prescribedPackage.pricing.amount === 25000, "Sprint pricing matches target ₹25,000 boundary");
-assert(analysis.prescribedPackage.pricing.advancePercentage === 100, "48h sprint enforces 100% advance payment gate");
+assert(analysis.prescribedPackage.name === "Digital Foundation", "Package mapper defaults to Digital Foundation for a first sale");
+assert(analysis.prescribedPackage.pricing.amount === 7999, "Digital Foundation price is transparent ₹7,999 one-time");
+assert(analysis.prescribedPackage.pricing.advancePercentage === 100, "Digital Foundation enforces 100% advance payment gate");
+
+// Verify Seeded Catalog Tiers
+import { YUGANTAR_CATALOG } from "../../artifacts/mockup-sandbox/src/components/mockups/yuvi/lib/sales/needsAnalysisEngine.js";
+assert(YUGANTAR_CATALOG.digital_foundation.pricing.amount === 7999, "Catalog has Digital Foundation at ₹7,999 one-time");
+assert(YUGANTAR_CATALOG.growth.pricing.amount === 14999, "Catalog has Growth at ₹14,999/mo");
+assert(YUGANTAR_CATALOG.scale.pricing.amount === 29999, "Catalog has Scale at ₹29,999/mo");
+assert(Array.isArray(YUGANTAR_CATALOG.digital_foundation.deliverables) && YUGANTAR_CATALOG.digital_foundation.deliverables.length > 0, "Digital Foundation deliverables are editable array");
 
 // --- 3. Proposal Composer & GST Calculation ---
 console.log("\n3. Proposal Composer & GST Calculation");
 
 // Case A: GST Disabled (Exempt / Unregistered 0%)
 const propNoGst = composeProposal(researchedLead, { gstEnabled: false });
-assert(propNoGst.proposal.subtotal === 25000, "Subtotal is ₹25,000");
+assert(propNoGst.proposal.subtotal === 7999, "Subtotal is ₹7,999");
 assert(propNoGst.proposal.taxRate === 0, "Tax rate is 0% when GST is disabled");
 assert(propNoGst.proposal.taxAmount === 0, "Tax amount is ₹0 when GST is disabled");
-assert(propNoGst.proposal.totalAmount === 25000, "Total amount is ₹25,000 without GST");
-assert(propNoGst.proposal.advanceAmount === 25000, "Advance required is ₹25,000 (100% advance gate)");
+assert(propNoGst.proposal.totalAmount === 7999, "Total amount is ₹7,999 without GST");
+assert(propNoGst.proposal.advanceAmount === 7999, "Advance required is ₹7,999 (100% advance gate)");
 
 // Case B: GST Enabled (18%)
 const propWithGst = composeProposal(researchedLead, { gstEnabled: true, gstRate: 18 });
-assert(propWithGst.proposal.subtotal === 25000, "Subtotal remains ₹25,000");
+assert(propWithGst.proposal.subtotal === 7999, "Subtotal remains ₹7,999");
 assert(propWithGst.proposal.taxRate === 18, "Tax rate is 18% when GST is enabled");
-assert(propWithGst.proposal.taxAmount === 4500, "Tax amount is ₹4,500 (18% of 25,000)");
-assert(propWithGst.proposal.totalAmount === 29500, "Total amount is ₹29,500 with GST");
-assert(propWithGst.proposal.advanceAmount === 29500, "Advance required is ₹29,500 with GST");
+const expectedTax = Math.round((7999 * 18) / 100);
+assert(propWithGst.proposal.taxAmount === expectedTax, `Tax amount is ₹${expectedTax} (18% of 7,999 rounded to whole rupee)`);
+const expectedTotal = 7999 + expectedTax;
+assert(propWithGst.proposal.totalAmount === expectedTotal, `Total amount is ₹${expectedTotal} with GST`);
+assert(propWithGst.proposal.advanceAmount === expectedTotal, `Advance required is ₹${expectedTotal} with GST`);
+
+
 
 // --- 4. WhatsApp Hinglish Pitch Constraint (Strictly <= 6 lines) ---
 console.log("\n4. WhatsApp Hinglish Pitch (<= 6 Lines Guardrail)");

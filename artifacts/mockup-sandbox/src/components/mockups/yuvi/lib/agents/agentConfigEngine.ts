@@ -6,6 +6,36 @@ import type { AgentConfig, AgentService, KnowledgeNode } from "../types/sales";
 
 export const DEFAULT_AGENCY_SERVICES: AgentService[] = [
   {
+    id: "srv-digital-foundation",
+    name: "Digital Foundation",
+    description: "Sub-2.0s mobile-first conversion landing page with instant 1-click WhatsApp lead capture concierge, Google Business Profile audit & local SEO verification.",
+    targetAudience: "Offline-first Ahmedabad & Gujarat businesses (clinics, salons, coaching, furniture, manufacturers)",
+    pricing: "₹7,999 one-time",
+    deliveryTimeline: "48 Hours",
+    pitchAngle: "Your website loses 50%+ of mobile visitors due to slow load times and no WhatsApp CTA. We deliver a high-speed conversion engine in 48 hours for ₹7,999.",
+    tags: ["foundation", "web-dev", "whatsapp", "48h"],
+  },
+  {
+    id: "srv-growth-monthly",
+    name: "Growth",
+    description: "Targeted outbound B2B client acquisition pipeline and ongoing conversion optimization for Gujarat commercial accounts.",
+    targetAudience: "Regional commercial leaders, clinics, design studios, manufacturers",
+    pricing: "₹14,999/month",
+    deliveryTimeline: "Monthly Retainer",
+    pitchAngle: "Consistent outbound B2B acquisition delivering verified inquiries and follow-up cadences every week.",
+    tags: ["growth", "retainer", "outbound", "b2b"],
+  },
+  {
+    id: "srv-scale-monthly",
+    name: "Scale",
+    description: "Turnkey client acquisition engine, automated CRM triage, and weekly executive growth reviews with agency founder.",
+    targetAudience: "High-ticket Gujarat firms, luxury retail, established multi-city businesses",
+    pricing: "₹29,999/month",
+    deliveryTimeline: "Monthly Retainer",
+    pitchAngle: "Full-stack turnkey growth operating system managing end-to-end client acquisition and revenue operations.",
+    tags: ["scale", "turnkey", "growth-os", "monthly"],
+  },
+  {
     id: "srv-fast-web",
     name: "Fast Web Dev (48h, Sub-2s Load)",
     description: "Ultra-fast headless web portal deployed within 48 hours with guaranteed sub-2 second mobile load times and integrated lead capture.",

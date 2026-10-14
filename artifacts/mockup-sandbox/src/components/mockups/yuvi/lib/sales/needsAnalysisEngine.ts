@@ -38,71 +38,79 @@ export interface NeedsAnalysisResult {
 
 /**
  * Standard Yugantar Growth Service Catalog
+ * Core Tiers:
+ * 1. Digital Foundation: ₹7,999 one-time (48 Hours, 100% advance)
+ * 2. Growth: ₹14,999/month (Monthly Retainer, 50% advance)
+ * 3. Scale: ₹29,999/month (Monthly Retainer, 50% advance)
  */
 export const YUGANTAR_CATALOG: Record<string, PrescribedPackage> = {
-  web_sprint_48h: {
-    packageId: "web_sprint_48h",
-    name: "Fast Web Dev & WhatsApp Concierge (48h)",
-    headline: "High-speed headless landing page with sub-2.0s mobile load and instant 1-click WhatsApp lead capture.",
+  digital_foundation: {
+    packageId: "digital_foundation",
+    name: "Digital Foundation",
+    headline: "Sub-2.0s mobile-first conversion landing page with instant 1-click WhatsApp lead capture concierge.",
     timeline: "48 Hours",
     pricing: {
-      amount: 25000,
-      advancePercentage: 100, // 100% advance for 48h sprint
-      advanceAmount: 25000,
+      amount: 7999,
+      advancePercentage: 100, // 100% advance for Foundation
+      advanceAmount: 7999,
     },
     deliverables: [
-      "Sub-2.0s mobile-first headless conversion landing page",
-      "Direct 1-click WhatsApp lead concierge with prefilled inquiry message",
-      "SSL certificate configuration & Google Search Console indexing",
-      "GA4 and Meta Pixel conversion event tracking instrumentation",
+      "Sub-2.0s mobile-first conversion landing page",
+      "Direct 1-click WhatsApp lead capture concierge",
+      "Google Business Profile audit & local SEO verification",
+      "SSL certificate active & Google Search Console indexing",
     ],
     items: [
-      { id: "item-1", description: "Headless High-Speed Mobile Landing Page (Sub-2s)", quantity: 1, unitPrice: 18000, amount: 18000 },
-      { id: "item-2", description: "Automated WhatsApp Lead Routing & Pixel Instrumentation", quantity: 1, unitPrice: 7000, amount: 7000 },
+      { id: "item-1", description: "Digital Foundation: Mobile-First Conversion Engine & WhatsApp Concierge", quantity: 1, unitPrice: 7999, amount: 7999 },
     ],
   },
-  outbound_pipeline: {
-    packageId: "outbound_pipeline",
-    name: "Direct B2B Outbound & ICP Funnel",
-    headline: "Targeted outbound acquisition framework for Gujarat commercial accounts, architects, and builders.",
-    timeline: "14 Days",
-    pricing: {
-      amount: 45000,
-      advancePercentage: 50,
-      advanceAmount: 22500,
-    },
-    deliverables: [
-      "Verifiable ICP lead list (Gujarat corridor accounts)",
-      "Multi-touch WhatsApp & email outreach sequences",
-      "Lead triage scoring & discovery call qualification scripts",
-      "Bi-weekly pipeline velocity telemetry reporting",
-    ],
-    items: [
-      { id: "item-1", description: "ICP Intelligence & Verified Sourcing Setup", quantity: 1, unitPrice: 20000, amount: 20000 },
-      { id: "item-2", description: "Outbound Multi-Channel Infrastructure & Scripts", quantity: 1, unitPrice: 25000, amount: 25000 },
-    ],
-  },
-  growth_os_retainer: {
-    packageId: "growth_os_retainer",
-    name: "Turnkey Growth Operating System Retainer",
-    headline: "End-to-end partner retainer managing monthly outbound acquisition, web optimizations, and pipeline triage.",
+  growth: {
+    packageId: "growth",
+    name: "Growth",
+    headline: "Targeted outbound B2B client acquisition pipeline and ongoing conversion optimization for Gujarat commercial accounts.",
     timeline: "Monthly Retainer",
     pricing: {
-      amount: 120000,
-      advancePercentage: 100, // Monthly retainers billed in advance
-      advanceAmount: 120000,
+      amount: 14999,
+      advancePercentage: 50,
+      advanceAmount: 7499.5,
     },
     deliverables: [
-      "Continuous weekly outbound acquisition sprints",
-      "Commercial brand positioning & lead conversion monitoring",
-      "Inbound inquiry triage & automated follow-up workflows",
-      "Weekly strategic executive review with agency founder",
+      "Everything in Digital Foundation",
+      "Targeted B2B outbound campaign (30 touches/day)",
+      "Lead triage scoring & WhatsApp follow-up cadence",
+      "Monthly conversion analytics & performance tracking",
     ],
     items: [
-      { id: "item-1", description: "Growth OS Monthly Retainer (Sprints 1-4)", quantity: 1, unitPrice: 120000, amount: 120000 },
+      { id: "item-1", description: "Growth Operating Engine & Outbound Pipeline (Monthly)", quantity: 1, unitPrice: 14999, amount: 14999 },
+    ],
+  },
+  scale: {
+    packageId: "scale",
+    name: "Scale",
+    headline: "Turnkey client acquisition engine, automated CRM triage, and weekly executive growth reviews with agency founder.",
+    timeline: "Monthly Retainer",
+    pricing: {
+      amount: 29999,
+      advancePercentage: 50,
+      advanceAmount: 14999.5,
+    },
+    deliverables: [
+      "Everything in Growth",
+      "Turnkey multi-channel client acquisition & CRM setup",
+      "Weekly strategic executive review with founder",
+      "Custom automation workflows & priority support",
+    ],
+    items: [
+      { id: "item-1", description: "Turnkey Scale Acquisition & Revenue OS (Monthly)", quantity: 1, unitPrice: 29999, amount: 29999 },
     ],
   },
 };
+
+// Backward-compatibility aliases
+YUGANTAR_CATALOG.web_sprint_48h = YUGANTAR_CATALOG.digital_foundation;
+YUGANTAR_CATALOG.outbound_pipeline = YUGANTAR_CATALOG.growth;
+YUGANTAR_CATALOG.growth_os_retainer = YUGANTAR_CATALOG.scale;
+
 
 /**
  * Analyzes lead research evidence and derives the top 3 commercial leaks
@@ -197,27 +205,18 @@ export function analyzeLeadNeeds(lead: NormalizedLead): NeedsAnalysisResult {
   const evidenceIds = topLeaks.map((l) => l.evidenceId);
 
   // Prescribe catalog package based on identified bottlenecks
-  let prescribedPackage = YUGANTAR_CATALOG.web_sprint_48h;
+  // Rule: Package mapper must default to Digital Foundation (₹7,999) for a first sale.
+  let prescribedPackage = YUGANTAR_CATALOG.digital_foundation;
 
-  const hasSpeedOrUxLeak = topLeaks.some((l) =>
-    l.leak.toLowerCase().includes("speed") ||
-    l.leak.toLowerCase().includes("latency") ||
-    l.leak.toLowerCase().includes("load") ||
-    l.leak.toLowerCase().includes("lcp") ||
-    l.leak.toLowerCase().includes("whatsapp") ||
-    l.leak.toLowerCase().includes("http") ||
-    l.leak.toLowerCase().includes("responsive"),
-  );
-
-  const isHighTier = lead.tier === "A" && (lead.score || 0) >= 80;
-
-  if (hasSpeedOrUxLeak) {
-    prescribedPackage = YUGANTAR_CATALOG.web_sprint_48h;
-  } else if (isHighTier) {
-    prescribedPackage = YUGANTAR_CATALOG.growth_os_retainer;
+  if (lead.status === "WON" || (lead.notes && lead.notes.toLowerCase().includes("scale"))) {
+    prescribedPackage = YUGANTAR_CATALOG.scale;
+  } else if (lead.notes && (lead.notes.toLowerCase().includes("growth") || lead.notes.toLowerCase().includes("retainer"))) {
+    prescribedPackage = YUGANTAR_CATALOG.growth;
   } else {
-    prescribedPackage = YUGANTAR_CATALOG.outbound_pipeline;
+    // Default strictly to Digital Foundation for a first sale
+    prescribedPackage = YUGANTAR_CATALOG.digital_foundation;
   }
+
 
   return {
     leadId: lead.id,

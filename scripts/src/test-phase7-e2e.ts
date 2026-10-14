@@ -163,8 +163,8 @@ console.log("\nSTEP 4: Needs Analysis & Proposal Composition");
 
 const needs = analyzeLeadNeeds(lead);
 assert(needs.topLeaks.length >= 2, "Needs analysis identified top commercial leaks linked to discrete evidence");
-assert(needs.prescribedPackage.packageId === "web_sprint_48h", "Prescribed 48-Hour Rapid Conversion Sprint package");
-assert(needs.prescribedPackage.pricing.amount === 25000, "Package base price is transparent ₹25,000");
+assert(needs.prescribedPackage.name === "Digital Foundation", "Prescribed Digital Foundation package for first sale");
+assert(needs.prescribedPackage.pricing.amount === 7999, "Package base price is transparent ₹7,999");
 
 const composed = composeProposal(lead, {
   founderName: "Shlok Pandya",
@@ -175,8 +175,9 @@ const proposal = composed.proposal;
 const pitches = composed.pitches;
 const a4Html = composed.printHtml;
 
-assert(proposal.totalAmount === 29500, "Calculated total including 18% GST (₹25,000 + ₹4,500 = ₹29,500)");
-assert(proposal.advanceAmount === 14750, "50% advance calculated as ₹14,750");
+assert(proposal.totalAmount === 9439, "Calculated total including 18% GST (₹7,999 + ₹1,440 = ₹9,439)");
+assert(proposal.advanceAmount === 4720, "50% advance calculated as ₹4,720");
+
 
 // Verify Hinglish WhatsApp Pitch constraint: <= 6 lines
 const waLineCheck = validateWhatsAppLineCount(pitches.whatsappHinglish);
@@ -336,7 +337,7 @@ const todayMetrics = computeTodayMetrics(
       ...project,
       advancePayment: {
         advanceReceived: true,
-        amountPaid: 14750,
+        amountPaid: 4720,
         utrReference: "428909876543",
       },
     } as any,
@@ -345,8 +346,9 @@ const todayMetrics = computeTodayMetrics(
   [],
 );
 
-assert(todayMetrics.collectedAmount === 14750, "Today screen tracks verified ₹14,750 collection");
-assert(todayMetrics.progressPercentage === 59, "Calculates 59% progress toward ₹25,000 monthly goal");
+assert(todayMetrics.collectedAmount === 4720, "Today screen tracks verified ₹4,720 collection");
+assert(todayMetrics.progressPercentage === 19, "Calculates 19% progress toward ₹25,000 goal");
+
 
 const briefingLines = generateMorningBriefing(todayMetrics, "Shlok");
 assert(briefingLines[0].includes("Namaste Shlok!"), "Generated 3-line morning briefing");

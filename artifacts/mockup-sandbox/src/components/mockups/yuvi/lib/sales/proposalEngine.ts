@@ -12,7 +12,56 @@ export interface ProposalTemplate {
 }
 
 export const PROPOSAL_TEMPLATES: Record<string, ProposalTemplate> = {
+  digital_foundation: {
+    key: "digital_foundation",
+    title: "Digital Foundation — Mobile-First Conversion Engine & WhatsApp Concierge",
+    scopeSummary: "Sub-2.0s mobile-first conversion landing page, 1-click WhatsApp lead capture concierge, Google Business Profile audit & local SEO verification deployed in 48 hours.",
+    deliverables: [
+      "Sub-2.0s mobile-first conversion landing page",
+      "Direct 1-click WhatsApp lead capture concierge",
+      "Google Business Profile audit & local SEO verification",
+      "SSL certificate active & Google Search Console indexing",
+    ],
+    defaultItems: [
+      { description: "Digital Foundation: Mobile Conversion Engine & WhatsApp Concierge (48h)", quantity: 1, unitPrice: 7999 },
+    ],
+    timelineWeeks: 1,
+    paymentTerms: "100% advance deposit required prior to kickoff (48h turnaround).",
+  },
+  growth: {
+    key: "growth",
+    title: "Growth — Targeted Outbound B2B Client Acquisition Pipeline",
+    scopeSummary: "Targeted outbound B2B client acquisition pipeline and ongoing conversion optimization for Gujarat commercial accounts.",
+    deliverables: [
+      "Everything in Digital Foundation",
+      "Targeted B2B outbound campaign (30 touches/day)",
+      "Lead triage scoring & WhatsApp follow-up cadence",
+      "Monthly conversion analytics & performance tracking",
+    ],
+    defaultItems: [
+      { description: "Growth Operating Engine & Outbound Pipeline (Monthly Retainer)", quantity: 1, unitPrice: 14999 },
+    ],
+    timelineWeeks: 4,
+    paymentTerms: "50% advance on monthly kickoff, 50% on Net 15.",
+  },
+  scale: {
+    key: "scale",
+    title: "Scale — Turnkey Client Acquisition Engine & Revenue OS",
+    scopeSummary: "Turnkey client acquisition engine, automated CRM triage, and weekly executive growth reviews with agency founder.",
+    deliverables: [
+      "Everything in Growth",
+      "Turnkey multi-channel client acquisition & CRM setup",
+      "Weekly strategic executive review with founder",
+      "Custom automation workflows & priority support",
+    ],
+    defaultItems: [
+      { description: "Turnkey Scale Acquisition & Revenue OS (Monthly Retainer)", quantity: 1, unitPrice: 29999 },
+    ],
+    timelineWeeks: 12,
+    paymentTerms: "50% advance on monthly kickoff, 50% on Net 15.",
+  },
   outbound_b2b: {
+
     key: "outbound_b2b",
     title: "Direct B2B Outbound Acquisition & Pipeline Infrastructure",
     scopeSummary: "End-to-end outbound client acquisition system targeting high-ticket commercial accounts in the Gujarat corridor. Includes lead intelligence, qualification architecture, and multi-channel introduction protocols.",
