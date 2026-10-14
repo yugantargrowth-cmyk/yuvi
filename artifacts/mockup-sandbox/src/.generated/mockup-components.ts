@@ -18,5 +18,6 @@ export const modules: ModuleMap = {
   "./components/mockups/yuvi/components/ProposalsView.tsx": () => import("../components/mockups/yuvi/components/ProposalsView.tsx"),
   "./components/mockups/yuvi/components/ReportsView.tsx": () => import("../components/mockups/yuvi/components/ReportsView.tsx"),
   "./components/mockups/yuvi/components/SettingsView.tsx": () => import("../components/mockups/yuvi/components/SettingsView.tsx"),
+  "./components/mockups/yuvi/components/SocialSnapshotModal.tsx": () => import("../components/mockups/yuvi/components/SocialSnapshotModal.tsx"),
   "./components/mockups/yuvi/components/ui.tsx": () => import("../components/mockups/yuvi/components/ui.tsx")
 };

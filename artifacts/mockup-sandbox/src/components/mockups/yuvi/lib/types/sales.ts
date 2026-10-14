@@ -143,6 +143,8 @@ export interface NormalizedLead {
   mapsUrl?: string;
   instagram?: string;
   triage?: LeadTriage;
+  researchEvidence?: import("../research/evidenceModel").EvidenceItem[];
+  socialSnapshot?: import("../research/evidenceModel").SocialSnapshot;
 }
 
 export interface LeadTriage {
