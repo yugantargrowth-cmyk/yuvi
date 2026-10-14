@@ -98,6 +98,22 @@ export interface NormalizedLead {
   primaryService?: string;
   recommendedChannel: "CALL" | "WHATSAPP" | "EMAIL" | "NONE";
   verifiedClaims: string[];
+  auditScore?: number;
+  speedSeconds?: number;
+  mobileAudit?: {
+    responsive: boolean;
+    hasWhatsAppCta: boolean;
+    speedScore: number;
+    issues: string[];
+  };
+  commercialLeaks?: string[];
+  growthPlaybook?: {
+    packageName: string;
+    description: string;
+    estimatedLift: string;
+    setupTimeline: string;
+    estimatedRoi: string;
+  };
   // Outreach & Call State
   outreachDrafts?: {
     whatsapp?: string;
@@ -315,4 +331,46 @@ export interface FinancialSummary {
     pending: number;
     overdue: number;
   };
+}
+
+// ============================================================================
+// AGENT WORKFORCE & CUSTOMIZATION TYPES
+// ============================================================================
+
+export interface AgentService {
+  id: string;
+  name: string;
+  description: string;
+  targetAudience?: string;
+  pricing: string; // e.g. "₹35,000/mo" or "₹45,000 one-time"
+  deliveryTimeline?: string; // e.g. "48 Hours", "7 Days"
+  pitchAngle?: string;
+  tags?: string[];
+}
+
+export interface AgentConfig {
+  id: string; // e.g. "yuvi" | "researcher" | "hunter" | "deckbuilder"
+  name: string;
+  role: string;
+  objective: string;
+  avatar?: string;
+  tone: string;
+  targetIndustries: string[];
+  targetGeographies: string[];
+  disqualificationTriggers: string[];
+  services: AgentService[];
+  knowledgeTags: string[];
+  rules: string[];
+  enabled: boolean;
+  autonomy: "full" | "assisted" | "manual";
+  updatedAt: string;
+}
+
+export interface KnowledgeNode {
+  id: string;
+  title: string;
+  category: "SERVICE" | "ICP_CRITERIA" | "CASE_STUDY" | "PRICING" | "PLAYBOOK" | "RULE";
+  content: string;
+  tags: string[];
+  updatedAt: string;
 }

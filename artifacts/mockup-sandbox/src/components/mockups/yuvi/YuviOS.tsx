@@ -37,10 +37,15 @@ import type {
   ClientAccount,
   CommercialProposal,
   ClientInvoice,
+  AgentConfig,
+  KnowledgeNode,
 } from "./lib/types/sales";
 import { convertLeadToClient } from "./lib/sales/clientDeliveryEngine";
 import { createProposalFromLead } from "./lib/sales/proposalEngine";
 import { createInvoiceFromProposal } from "./lib/sales/financeEngine";
+import { DEFAULT_AGENT_CONFIGS, DEFAULT_KNOWLEDGE_NODES, DEFAULT_AGENCY_SERVICES } from "./lib/agents/agentConfigEngine";
+import { auditLead } from "./lib/research/leadResearcher";
+import { syncAllTablesWithSupabase } from "./lib/supabaseClient";
 
 const VALID_VIEWS: View[] = [
   "Dashboard",
@@ -488,6 +493,29 @@ export function YuviOS() {
   const [invoices, setInvoices] = useState<ClientInvoice[]>(() => store.read("commercial_invoices", initialInvoices));
   useEffect(() => { store.write("commercial_invoices", invoices); }, [invoices]);
 
+  const [agentConfigs, setAgentConfigs] = useState<AgentConfig[]>(() => store.read("agent_configs", DEFAULT_AGENT_CONFIGS));
+  useEffect(() => { store.write("agent_configs", agentConfigs); }, [agentConfigs]);
+
+  const [knowledgeNodes, setKnowledgeNodes] = useState<KnowledgeNode[]>(() => store.read("knowledge_nodes", DEFAULT_KNOWLEDGE_NODES));
+  useEffect(() => { store.write("knowledge_nodes", knowledgeNodes); }, [knowledgeNodes]);
+
+  // Background Supabase 5-table auto-sync
+  useEffect(() => {
+    if (settings.supabase?.autoSync && settings.supabase?.url && settings.supabase?.anonKey) {
+      syncAllTablesWithSupabase(
+        {
+          leads,
+          clients,
+          proposals,
+          configs: agentConfigs,
+          knowledgeNodes,
+        },
+        settings.supabase.url,
+        settings.supabase.anonKey
+      ).catch(() => {});
+    }
+  }, [leads.length, clients.length, proposals.length, agentConfigs.length]);
+
   const [notifs, setNotifs] = useState<Notif[]>(initialNotifs);
 
   // Conversion & Document Handlers
@@ -691,35 +719,22 @@ export function YuviOS() {
   // Real Researcher trigger
   const handleRunResearch = async (lead: NormalizedLead) => {
     setResearchingLeadId(lead.id);
-    notify(`Researcher analyzing digital footprint for ${lead.companyName}...`);
+    notify(`Researcher auditing digital footprint & bottlenecks for ${lead.companyName}...`);
 
-    const verifiedClaims = [
-      `Verified commercial operations in ${lead.city}, Gujarat.`,
-      lead.websiteUrl ? `Digital domain verified: ${lead.websiteUrl}` : `Direct phone line verified: ${lead.phone}`,
-      lead.primaryService ? `Service alignment: ${lead.primaryService}` : `Category: ${lead.category || lead.industry}`
-    ];
+    try {
+      const activeServices = agentConfigs.find(c => c.id === "researcher")?.services || DEFAULT_AGENCY_SERVICES;
+      const updatedLead = await auditLead(lead, activeServices);
 
-    const newActivity = {
-      id: `act_${Date.now()}_research`,
-      timestamp: new Date().toISOString(),
-      action: "Digital Footprint Audited & Verified",
-      note: `Claims: ${verifiedClaims.join(" · ")}`,
-      author: "Researcher"
-    };
-
-    const updatedLead: NormalizedLead = {
-      ...lead,
-      verifiedClaims: Array.from(new Set([...(lead.verifiedClaims || []), ...verifiedClaims])),
-      activityHistory: [newActivity, ...(lead.activityHistory || [])],
-      updatedAt: new Date().toISOString()
-    };
-
-    setLeads(prev => prev.map(l => l.id === updatedLead.id ? updatedLead : l));
-    if (selectedLeadForDetail?.id === lead.id) {
-      setSelectedLeadForDetail(updatedLead);
+      setLeads(prev => prev.map(l => (l.id === updatedLead.id ? updatedLead : l)));
+      if (selectedLeadForDetail?.id === lead.id) {
+        setSelectedLeadForDetail(updatedLead);
+      }
+      notify(`Audit complete for ${lead.companyName}! Score: ${updatedLead.auditScore}/100. Playbook formulated.`);
+    } catch (err) {
+      notify(`Research failed: ${String(err)}`);
+    } finally {
+      setResearchingLeadId(null);
     }
-    setResearchingLeadId(null);
-    notify(`Intelligence verified for ${lead.companyName}. Digital footprint audit complete.`);
   };
 
   // Lock screen view
@@ -819,6 +834,8 @@ export function YuviOS() {
           <ApprovalsView
             approvals={approvals}
             setApprovals={setApprovals}
+            leads={leads}
+            setLeads={setLeads}
             notify={notify}
           />
         );
@@ -830,6 +847,8 @@ export function YuviOS() {
             callQueue={callQueue}
             setCallQueue={setCallQueue}
             settings={settings}
+            configs={agentConfigs}
+            onUpdateConfigs={setAgentConfigs}
             notify={notify}
           />
         );
@@ -838,6 +857,11 @@ export function YuviOS() {
           <ChatView
             leads={leads}
             callQueue={callQueue}
+            configs={agentConfigs}
+            onUpdateConfigs={setAgentConfigs}
+            invoices={invoices}
+            clients={clients}
+            proposals={proposals}
             onTriggerEngine={triggerSalesEngine}
             settings={settings}
             notify={notify}

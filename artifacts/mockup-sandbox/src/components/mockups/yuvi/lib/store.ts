@@ -1,7 +1,16 @@
-// Local persistence for YUVI Command Deck (Mission 1 scope).
+// Local persistence for YUVI Command Deck.
 // One centralized store — nothing else in the app should call localStorage directly.
-// Mission 2/3 will replace this module's internals with real Supabase-backed calls
-// without touching call sites, since every consumer goes through get/set here.
+// Offline-first caching with Supabase table synchronization.
+
+import type {
+  NormalizedLead,
+  ClientAccount,
+  CommercialProposal,
+  ClientInvoice,
+  AgentConfig,
+  KnowledgeNode,
+} from "./types/sales";
+import { DEFAULT_AGENT_CONFIGS, DEFAULT_KNOWLEDGE_NODES } from "./agents/agentConfigEngine";
 
 const PREFIX = "yuvi:";
 
@@ -225,4 +234,56 @@ export function saveGroqKey(_key: string): void {
 }
 export function clearGroqKey(): void {
   purgeBrowserGroqKeys();
+}
+
+// ============================================================================
+// OFFLINE-FIRST ENTITY PERSISTENCE
+// ============================================================================
+
+export function loadStoredAgentConfigs(): AgentConfig[] {
+  return read<AgentConfig[]>("agent_configs", DEFAULT_AGENT_CONFIGS);
+}
+
+export function saveStoredAgentConfigs(configs: AgentConfig[]): void {
+  write("agent_configs", configs);
+}
+
+export function loadStoredKnowledgeNodes(): KnowledgeNode[] {
+  return read<KnowledgeNode[]>("knowledge_nodes", DEFAULT_KNOWLEDGE_NODES);
+}
+
+export function saveStoredKnowledgeNodes(nodes: KnowledgeNode[]): void {
+  write("knowledge_nodes", nodes);
+}
+
+export function loadStoredLeads(): NormalizedLead[] {
+  return read<NormalizedLead[]>("leads", []);
+}
+
+export function saveStoredLeads(leads: NormalizedLead[]): void {
+  write("leads", leads);
+}
+
+export function loadStoredClientAccounts(): ClientAccount[] {
+  return read<ClientAccount[]>("client_accounts", []);
+}
+
+export function saveStoredClientAccounts(clients: ClientAccount[]): void {
+  write("client_accounts", clients);
+}
+
+export function loadStoredCommercialProposals(): CommercialProposal[] {
+  return read<CommercialProposal[]>("commercial_proposals", []);
+}
+
+export function saveStoredCommercialProposals(proposals: CommercialProposal[]): void {
+  write("commercial_proposals", proposals);
+}
+
+export function loadStoredCommercialInvoices(): ClientInvoice[] {
+  return read<ClientInvoice[]>("commercial_invoices", []);
+}
+
+export function saveStoredCommercialInvoices(invoices: ClientInvoice[]): void {
+  write("commercial_invoices", invoices);
 }

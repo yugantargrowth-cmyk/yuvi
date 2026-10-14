@@ -1,13 +1,14 @@
-// components/AITeamView.tsx — Interactive AI Workforce Execution Hub (7 Employees)
+// components/AITeamView.tsx — Interactive AI Workforce Execution Hub & Customization Deck
 import React, { useState } from "react";
-import type { NormalizedLead, CallQueueItem, EmployeeId, EmployeeTask } from "../lib/types/sales";
+import type { NormalizedLead, CallQueueItem, EmployeeId, EmployeeTask, AgentConfig } from "../lib/types/sales";
 import type { YuviSettings } from "../lib/store";
 import { EMPLOYEES } from "../lib/execution/taskSystem";
 import { EMPLOYEE_PRESET_ACTIONS, executeEmployeeAction } from "../lib/execution/employeeExecutors";
+import { AgentCustomizationDeck } from "./AgentCustomizationDeck";
 import { Button, Panel, ViewHeading } from "./ui";
 import {
   Bot, Play, CheckCircle2, AlertCircle, RefreshCw, Terminal,
-  Clock, ShieldCheck, ChevronRight, History, Layers
+  Clock, ShieldCheck, ChevronRight, History, Layers, Sliders
 } from "lucide-react";
 
 interface AITeamViewProps {
@@ -16,6 +17,8 @@ interface AITeamViewProps {
   callQueue: CallQueueItem[];
   setCallQueue: (queue: CallQueueItem[]) => void;
   settings: YuviSettings;
+  configs?: AgentConfig[];
+  onUpdateConfigs?: (configs: AgentConfig[]) => void;
   notify: (text: string) => void;
 }
 
@@ -25,8 +28,11 @@ export function AITeamView({
   callQueue,
   setCallQueue,
   settings,
+  configs = [],
+  onUpdateConfigs = () => {},
   notify,
 }: AITeamViewProps) {
+  const [activeTab, setActiveTab] = useState<"execution" | "customization">("execution");
   const [selectedEmpId, setSelectedEmpId] = useState<EmployeeId>("hunter");
   const [selectedActionId, setSelectedActionId] = useState<string>("");
   const [customObjective, setCustomObjective] = useState("");
@@ -71,9 +77,40 @@ export function AITeamView({
     <div className="rise space-y-5 p-4 sm:p-7">
       <ViewHeading
         view="AI Team"
-        description="Autonomous Enterprise Workforce — Scout, Hunter, Researcher, Analyst, Operator, Spark, and Publisher."
+        description="Autonomous Enterprise Workforce — Orchestrated by Yuvi. Tune services, skills, rules, or dispatch actions."
+        action={
+          <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-black/40 p-1">
+            <button
+              onClick={() => setActiveTab("execution")}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                activeTab === "execution"
+                  ? "bg-violet-600 text-white shadow-md"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Terminal size={13} /> Workforce Execution
+            </button>
+            <button
+              onClick={() => setActiveTab("customization")}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                activeTab === "customization"
+                  ? "bg-violet-600 text-white shadow-md"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Sliders size={13} /> Customization & Skills
+            </button>
+          </div>
+        }
       />
 
+      {activeTab === "customization" ? (
+        <AgentCustomizationDeck
+          configs={configs}
+          onUpdateConfigs={onUpdateConfigs}
+          notify={notify}
+        />
+      ) : (
       <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
         {/* Employee Roster List */}
         <Panel className="h-fit p-3 space-y-1.5">
@@ -285,6 +322,7 @@ export function AITeamView({
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

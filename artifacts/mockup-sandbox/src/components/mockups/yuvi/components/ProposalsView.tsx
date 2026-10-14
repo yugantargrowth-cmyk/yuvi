@@ -5,8 +5,9 @@ import { PROPOSAL_TEMPLATES, createProposalFromLead, calculateProposalTotals, va
 import { Button, Panel, ViewHeading } from "./ui";
 import {
   FileText, Plus, Download, Printer, CheckCircle2, XCircle, Send,
-  ArrowRight, ShieldCheck, X, Eye, Edit3, Trash2
+  ArrowRight, ShieldCheck, X, Eye, Edit3, Trash2, Presentation
 } from "lucide-react";
+import { generateClientPitchDeck } from "../lib/export/presentationBuilder";
 
 interface ProposalsViewProps {
   proposals: CommercialProposal[];
@@ -241,6 +242,44 @@ export function ProposalsView({
                     <Button onClick={() => setActiveProposalForDoc(p)}>
                       <Eye size={13} /> View / Print
                     </Button>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        notify(`DeckBuilder generating PowerPoint presentation for ${p.clientName}...`);
+                        const lead = leads.find(l => l.id === p.leadId) || {
+                          id: p.leadId || "lead",
+                          companyName: p.clientName,
+                          contactPerson: p.contactPerson,
+                          phone: p.phone,
+                          email: p.email,
+                          websiteUrl: "",
+                          city: "Ahmedabad",
+                          state: "Gujarat",
+                          country: "India",
+                          industry: "Commercial",
+                          category: "Commercial",
+                          status: "PROPOSAL" as const,
+                          score: 85,
+                          tier: "A" as const,
+                          notes: "",
+                          rawRecord: {},
+                          createdAt: p.createdAt,
+                          updatedAt: p.createdAt,
+                          recommendedChannel: "WHATSAPP" as const,
+                          verifiedClaims: [],
+                        };
+                        try {
+                          const fileName = await generateClientPitchDeck({ lead, proposal: p });
+                          notify(`Downloaded pitch deck: ${fileName}`);
+                        } catch (err) {
+                          notify(`Presentation error: ${String(err)}`);
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/40 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/25 transition-all"
+                    >
+                      <Presentation size={13} /> Pitch Deck (.pptx)
+                    </button>
 
                     {p.status === "DRAFT" && (
                       <Button variant="primary" onClick={() => updateProposalStatus(p.id, "SENT")}>

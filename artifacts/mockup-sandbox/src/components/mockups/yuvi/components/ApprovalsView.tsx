@@ -1,6 +1,6 @@
 // components/ApprovalsView.tsx — Consequential Action Safety Gate
 import React, { useState } from "react";
-import type { LeadTier } from "../lib/types/sales";
+import type { LeadTier, NormalizedLead } from "../lib/types/sales";
 import { Button, Panel, TierPill, StatusPill, ViewHeading } from "./ui";
 import {
   ShieldCheck, CheckCircle2, XCircle, Edit3, MessageCircle,
@@ -28,12 +28,16 @@ export interface ApprovalItem {
 interface ApprovalsViewProps {
   approvals: ApprovalItem[];
   setApprovals: (approvals: ApprovalItem[]) => void;
+  leads?: NormalizedLead[];
+  setLeads?: (leads: NormalizedLead[]) => void;
   notify: (text: string) => void;
 }
 
 export function ApprovalsView({
   approvals,
   setApprovals,
+  leads,
+  setLeads,
   notify,
 }: ApprovalsViewProps) {
   const [filter, setFilter] = useState<"ALL" | ApprovalStatus>("ALL");
@@ -212,7 +216,29 @@ export function ApprovalsView({
                       href={whatsappUrl}
                       target="_blank"
                       rel="noreferrer"
-                      onClick={() => updateStatus(selected.id, "PUBLISHED / COMPLETED")}
+                      onClick={() => {
+                        updateStatus(selected.id, "PUBLISHED / COMPLETED");
+                        if (leads && setLeads && selected.leadId) {
+                          setLeads(leads.map(l => {
+                            if (l.id === selected.leadId) {
+                              const act = {
+                                id: `act_wa_${Date.now()}`,
+                                timestamp: new Date().toISOString(),
+                                action: "WhatsApp Pitch Dispatched (Approved via Gate)",
+                                note: `Hunter copy sent: "${selected.exactMessage?.slice(0, 100)}..."`,
+                                author: "Hunter",
+                              };
+                              return {
+                                ...l,
+                                status: l.status === "NEW" ? "CONTACTED" : l.status,
+                                lastContact: new Date().toISOString(),
+                                activityHistory: [act, ...(l.activityHistory || [])],
+                              };
+                            }
+                            return l;
+                          }));
+                        }
+                      }}
                       className="flex items-center justify-center gap-2 rounded-lg bg-emerald-500 py-2.5 text-xs font-bold text-black hover:bg-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all"
                     >
                       <MessageCircle size={15} /> Open & Send via WhatsApp Web

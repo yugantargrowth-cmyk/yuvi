@@ -55,3 +55,6 @@ Thumbs.db
 .vercel
 .env*
 supabase/.temp/
+activepieces/
+brahma_reference/
+*.pptx

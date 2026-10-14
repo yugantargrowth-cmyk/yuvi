@@ -1,15 +1,24 @@
 // components/ChatView.tsx — YUVI Conversational Orchestrator & Real Voice Chat
 import React, { useState, useRef, useEffect, type FormEvent } from "react";
-import type { NormalizedLead, CallQueueItem, DailySalesReport } from "../lib/types/sales";
+import type {
+  NormalizedLead,
+  CallQueueItem,
+  DailySalesReport,
+  AgentConfig,
+  ClientInvoice,
+  ClientAccount,
+  CommercialProposal,
+} from "../lib/types/sales";
 import type { YuviSettings } from "../lib/store";
 import { detectDailyIntent, handleDailyCommand } from "../lib/sales/intentRouter";
+import { parseConversationalAgentInstruction } from "../lib/agents/agentConfigEngine";
 import { completeWithGroq } from "../lib/groq";
 import { startListening, stopListening, speakText, stopSpeaking, isSpeechRecognitionSupported } from "../lib/voiceEngine";
 import { INITIAL_KNOWLEDGE_ARTICLES, buildKnowledgeContextPrompt } from "../lib/knowledgeBase";
 import { Button, Avatar, Panel, ViewHeading } from "./ui";
 import {
   Send, Mic, MicOff, Volume2, VolumeX, Sparkles, Rocket,
-  Phone, Radio, Bot, Command, HelpCircle
+  Phone, Radio, Bot, Command, HelpCircle, SunMedium, Sliders
 } from "lucide-react";
 
 interface ChatMessage {
@@ -23,6 +32,11 @@ interface ChatViewProps {
   leads: NormalizedLead[];
   callQueue: CallQueueItem[];
   report?: DailySalesReport;
+  configs?: AgentConfig[];
+  onUpdateConfigs?: (configs: AgentConfig[]) => void;
+  invoices?: ClientInvoice[];
+  clients?: ClientAccount[];
+  proposals?: CommercialProposal[];
   onTriggerEngine: () => void;
   settings: YuviSettings;
   notify: (text: string) => void;
@@ -33,6 +47,11 @@ export function ChatView({
   leads,
   callQueue,
   report,
+  configs = [],
+  onUpdateConfigs,
+  invoices = [],
+  clients = [],
+  proposals = [],
   onTriggerEngine,
   settings,
   notify,
@@ -73,7 +92,88 @@ export function ChatView({
     setInput("");
     setIsThinking(true);
 
-    // 1. Check for Daily Command Intents
+    // 1. Check for Conversational Agent Workforce Customization
+    const conversationalUpdate = parseConversationalAgentInstruction(clean, configs || []);
+    if (conversationalUpdate.matched) {
+      if (onUpdateConfigs && conversationalUpdate.updatedConfigs) {
+        onUpdateConfigs(conversationalUpdate.updatedConfigs);
+      }
+      setIsThinking(false);
+      const replyMsg: ChatMessage = {
+        id: `yuv_${Date.now()}`,
+        role: "yuvi",
+        text: conversationalUpdate.replyMessage,
+        timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+      };
+      setMessages(prev => [...prev, replyMsg]);
+      if (settings.voice?.enabled) {
+        setIsSpeaking(true);
+        speakText(conversationalUpdate.replyMessage, {
+          rate: settings.voice?.rate ?? 1.05,
+          onEnd: () => setIsSpeaking(false),
+          onError: () => setIsSpeaking(false),
+        });
+      }
+      notify("Agent workforce skills & service catalog updated.");
+      return;
+    }
+
+    // 2. Check for Morning Revenue Diagnostic Briefing
+    const lowerClean = clean.toLowerCase();
+    const isMorningBriefing =
+      lowerClean.includes("morning briefing") ||
+      lowerClean.includes("morning diagnostic") ||
+      lowerClean.includes("revenue diagnostic") ||
+      lowerClean.includes("daily brief") ||
+      lowerClean.includes("revenue brief") ||
+      lowerClean.includes("morning brief");
+
+    if (isMorningBriefing) {
+      setIsThinking(false);
+      const uncontacted = leads.filter(l => l.status === "NEW");
+      const pendingCalls = callQueue.filter(c => c.callStatus === "PENDING");
+      const overdueInvoices = invoices.filter(i => i.status === "OVERDUE");
+      const overdueSum = overdueInvoices.reduce((acc, i) => acc + (i.balanceDue || 0), 0);
+      const activeRetainers = clients.reduce((acc, c) => acc + (c.monthlyRetainer || 0), 0);
+      const activeProposals = proposals.filter(p => p.status === "SENT" || p.status === "DRAFT");
+
+      const briefText = `☀️ **Good morning, ${settings.identity?.founderName || "Shlok"}. Here is your Executive Revenue Briefing:**
+
+📊 **Pipeline & Cash Telemetry:**
+• **Active Pipeline:** ${leads.length} accounts monitored across Gujarat (${leads.filter(l => l.tier === "A").length} Tier-A High Priority)
+• **Monthly Contract Retainers:** ₹${(activeRetainers / 100000).toFixed(1)}L/month currently active
+• **Uncontacted Accounts:** ${uncontacted.length} fresh leads awaiting Hunter WhatsApp pitches
+• **Pending Calls:** ${pendingCalls.length} discovery calls scheduled in queue
+• **Receivables Status:** ${overdueInvoices.length > 0 ? `₹${overdueSum.toLocaleString("en-IN")} overdue across ${overdueInvoices.length} invoices` : "Zero overdue invoices. All cash collections on track."}
+• **Open Proposals:** ${activeProposals.length} active quotations awaiting client signature
+
+🎯 **Yuvi's High-Margin Action Priorities for Today:**
+1. **Outreach:** Send 1-click WhatsApp pitches to ${uncontacted.slice(0, 3).map(l => l.companyName).join(", ") || "new pipeline accounts"}.
+2. **Audits:** Run Deep Researcher audits on Tier-A architects and clinics in Bodakdev & SG Highway.
+3. **Follow-ups:** Check in with pending proposals to close end-of-month deals.
+
+Ready to dispatch Hunter or review specific client proposals?`;
+
+      const replyMsg: ChatMessage = {
+        id: `yuv_${Date.now()}`,
+        role: "yuvi",
+        text: briefText,
+        timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+      };
+      setMessages(prev => [...prev, replyMsg]);
+
+      if (settings.voice?.enabled) {
+        setIsSpeaking(true);
+        speakText(briefText, {
+          rate: settings.voice?.rate ?? 1.05,
+          onEnd: () => setIsSpeaking(false),
+          onError: () => setIsSpeaking(false),
+        });
+      }
+      return;
+    }
+
+    // 3. Check for Daily Command Intents
     const intent = detectDailyIntent(clean);
     if (intent !== "UNKNOWN") {
       const result = handleDailyCommand(intent, { leads, callQueue, report, onTriggerEngine });
@@ -193,6 +293,8 @@ export function ChatView({
   };
 
   const quickCommands = [
+    "Morning Revenue Briefing",
+    "Yuvi, we now offer AI Receptionist for luxury clinics at ₹35,000/mo. Update the Researcher's service catalog and teach Hunter the new pitch angle",
     "What should I do today?",
     "Give me todays calls",
     "Prepare todays outreach",

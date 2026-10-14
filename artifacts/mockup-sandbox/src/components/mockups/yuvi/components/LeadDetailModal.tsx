@@ -5,8 +5,12 @@ import { Button, TierPill, StatusPill } from "./ui";
 import {
   X, Phone, MessageCircle, Mail, Globe, MapPin, Calendar, Clock,
   CheckCircle2, Plus, Trash2, Sparkles, Send, Building2, User,
-  FileText, CheckSquare, History, ExternalLink, ArrowRight, UserCheck
+  FileText, CheckSquare, History, ExternalLink, ArrowRight, UserCheck,
+  Presentation, AlertTriangle, ShieldCheck, Zap
 } from "lucide-react";
+import { auditLead } from "../lib/research/leadResearcher";
+import { generateHunterPitch, recordWhatsAppDispatch, generateWhatsAppDeepLink } from "../lib/outreach/hunterOutreach";
+import { generateClientPitchDeck } from "../lib/export/presentationBuilder";
 
 interface LeadDetailModalProps {
   lead: NormalizedLead;
@@ -53,6 +57,49 @@ export function LeadDetailModal({
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [convType, setConvType] = useState<"MONTHLY_RETAINER" | "FIXED_PROJECT">("MONTHLY_RETAINER");
   const [convFee, setConvFee] = useState<number>(120000);
+
+  // Workforce action states
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [isGeneratingDeck, setIsGeneratingDeck] = useState(false);
+
+  const handleDeepResearch = async () => {
+    setIsAuditing(true);
+    notify(`Researcher auditing digital footprint & bottlenecks for ${lead.companyName}...`);
+    try {
+      const updated = await auditLead(lead);
+      onUpdateLead(updated);
+      notify(`Deep audit complete! Score: ${updated.auditScore}/100. Commercial leaks identified.`);
+    } catch (err) {
+      notify(`Research error: ${String(err)}`);
+    } finally {
+      setIsAuditing(false);
+    }
+  };
+
+  const handleWhatsAppDispatch = () => {
+    if (!lead.phone) {
+      notify("Lead does not have a phone number.");
+      return;
+    }
+    const pitch = lead.outreachDrafts?.whatsapp || generateHunterPitch(lead).whatsappPitch;
+    const { updatedLead, deepLink } = recordWhatsAppDispatch(lead, pitch);
+    onUpdateLead(updatedLead);
+    window.open(deepLink, "_blank");
+    notify(`Dispatched WhatsApp message via wa.me & logged in activity history.`);
+  };
+
+  const handleBuildPitchDeck = async () => {
+    setIsGeneratingDeck(true);
+    notify(`DeckBuilder generating native PowerPoint pitch deck for ${lead.companyName}...`);
+    try {
+      const fileName = await generateClientPitchDeck({ lead });
+      notify(`Generated & downloaded PowerPoint presentation: ${fileName}`);
+    } catch (err) {
+      notify(`Deck generation error: ${String(err)}`);
+    } finally {
+      setIsGeneratingDeck(false);
+    }
+  };
 
   const handleSaveInfo = (e: FormEvent) => {
     e.preventDefault();
@@ -221,16 +268,13 @@ export function LeadDetailModal({
                 >
                   <Phone size={13} /> Call
                 </a>
-                {whatsappUrl && (
-                  <a
-                    href={whatsappUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5 text-xs font-medium text-emerald-200 hover:bg-emerald-400/20"
-                  >
-                    <MessageCircle size={13} /> WhatsApp
-                  </a>
-                )}
+                <button
+                  type="button"
+                  onClick={handleWhatsAppDispatch}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/30 transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+                >
+                  <MessageCircle size={13} /> 1-Click WhatsApp
+                </button>
               </>
             )}
             {lead.email && (
@@ -241,9 +285,19 @@ export function LeadDetailModal({
                 <Mail size={13} /> Email
               </a>
             )}
-            <Button onClick={() => onRunResearch(lead)}>
-              <Sparkles size={13} /> AI Research
+            <Button onClick={handleDeepResearch} disabled={isAuditing}>
+              <Sparkles size={13} className={isAuditing ? "animate-spin" : ""} />
+              {isAuditing ? "Auditing..." : "Run Deep Research"}
             </Button>
+            <button
+              type="button"
+              onClick={handleBuildPitchDeck}
+              disabled={isGeneratingDeck}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/40 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-500/25 transition-all"
+            >
+              <Presentation size={13} />
+              {isGeneratingDeck ? "Building..." : "Build Pitch Deck (.pptx)"}
+            </button>
             {lead.status !== "WON" && onConvertToClient && (
               <Button variant="success" onClick={() => setShowConvertModal(true)}>
                 <UserCheck size={13} /> Convert to Client
@@ -362,15 +416,109 @@ export function LeadDetailModal({
                 </div>
               </div>
 
-              {/* Commercial Intelligence Card */}
-              <div className="rounded-xl border border-violet-400/15 bg-violet-500/5 p-4 space-y-2">
-                <div className="text-[10px] uppercase tracking-wider text-violet-300 font-semibold">Strategic Commercial Angle</div>
-                <div className="text-xs text-slate-300">
-                  <b>Commercial Bottleneck:</b> {lead.bottleneck || "Static offline reputation without dedicated outbound client engine."}
+              {/* Deep Digital Footprint & Bottlenecks Diagnostic Section */}
+              <div className="rounded-xl border border-violet-500/25 bg-gradient-to-br from-violet-950/30 via-black/40 to-black/60 p-4 space-y-3.5">
+                <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={14} className="text-violet-400" />
+                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                      Researcher: Digital Footprint & Bottleneck Diagnosis
+                    </span>
+                  </div>
+                  {lead.auditScore !== undefined ? (
+                    <span className="font-mono text-xs font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20">
+                      Audit Score: {lead.auditScore}/100
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-slate-400">Audit Pending</span>
+                  )}
                 </div>
-                <div className="text-xs text-cyan-300">
-                  <b>Recommended Service:</b> {lead.primaryService || lead.recommendedService || "Direct Outbound & High-Value B2B Acquisition Engine"}
+
+                {/* Audit Metrics Row */}
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="rounded-lg border border-white/5 bg-black/30 p-2.5 text-center">
+                    <div className="text-[10px] text-slate-400 uppercase">Mobile Speed</div>
+                    <div className={`mt-0.5 font-mono text-sm font-bold ${
+                      (lead.speedSeconds || 3.8) <= 2.0 ? "text-emerald-400" : "text-amber-400"
+                    }`}>
+                      {lead.speedSeconds ? `${lead.speedSeconds.toFixed(1)}s` : "3.8s (Est.)"}
+                    </div>
+                    <div className="text-[9px] text-slate-500">Sub-2.0s Required</div>
+                  </div>
+
+                  <div className="rounded-lg border border-white/5 bg-black/30 p-2.5 text-center">
+                    <div className="text-[10px] text-slate-400 uppercase">Mobile UX</div>
+                    <div className="mt-0.5 text-xs font-semibold text-cyan-300">
+                      {lead.mobileAudit?.responsive !== false ? "Responsive" : "Non-Responsive"}
+                    </div>
+                    <div className="text-[9px] text-slate-500">Viewport Health</div>
+                  </div>
+
+                  <div className="rounded-lg border border-white/5 bg-black/30 p-2.5 text-center">
+                    <div className="text-[10px] text-slate-400 uppercase">WhatsApp CTA</div>
+                    <div className={`mt-0.5 text-xs font-semibold ${
+                      lead.mobileAudit?.hasWhatsAppCta ? "text-emerald-400" : "text-red-400"
+                    }`}>
+                      {lead.mobileAudit?.hasWhatsAppCta ? "Detected" : "Missing / Leak"}
+                    </div>
+                    <div className="text-[9px] text-slate-500">Instant Lead Capture</div>
+                  </div>
+
+                  <div className="rounded-lg border border-white/5 bg-black/30 p-2.5 text-center">
+                    <div className="text-[10px] text-slate-400 uppercase">SSL Protocol</div>
+                    <div className="mt-0.5 text-xs font-semibold text-emerald-400">
+                      {lead.websiteUrl?.startsWith("http://") ? "HTTP (Insecure)" : "HTTPS Encrypted"}
+                    </div>
+                    <div className="text-[9px] text-slate-500">Enterprise Trust</div>
+                  </div>
                 </div>
+
+                {/* Primary Bottleneck */}
+                <div className="rounded-lg border border-red-500/20 bg-red-950/20 p-3 space-y-1">
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-red-300">
+                    <AlertTriangle size={13} /> Commercial Revenue Leak
+                  </div>
+                  <div className="text-xs text-slate-200">
+                    {lead.bottleneck || "High-value commercial operations currently leaking >50% of mobile inquiries due to unoptimized load speeds and lack of direct conversational booking."}
+                  </div>
+                </div>
+
+                {/* Recommended Growth Playbook */}
+                <div className="rounded-lg border border-emerald-500/25 bg-emerald-950/20 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
+                      <Zap size={13} /> Recommended Growth Playbook: {lead.growthPlaybook?.packageName || lead.recommendedService || "Fast Web Dev (48h, Sub-2s Load) & AI WhatsApp Engine"}
+                    </span>
+                    <span className="text-[10px] font-mono text-emerald-400 font-semibold">
+                      Timeline: {lead.growthPlaybook?.setupTimeline || "48 Hours"}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-300">
+                    {lead.growthPlaybook?.description || "Headless web reconstruction paired with 24/7 automated WhatsApp inquiry qualification."}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 text-[11px] text-emerald-200 pt-1">
+                    <span><b>Projected Lift:</b> {lead.growthPlaybook?.estimatedLift || "+40% to +65% Mobile Inquiry Lift"}</span>
+                    <span>•</span>
+                    <span><b>ROI Expectation:</b> {lead.growthPlaybook?.estimatedRoi || "3x to 5x within 60 Days"}</span>
+                  </div>
+                </div>
+
+                {/* Verified Claims */}
+                {lead.verifiedClaims && lead.verifiedClaims.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1">
+                      <ShieldCheck size={12} className="text-cyan-400" /> Verified Factual Claims
+                    </div>
+                    <div className="space-y-1">
+                      {lead.verifiedClaims.slice(0, 4).map((claim, idx) => (
+                        <div key={idx} className="text-xs text-slate-300 flex items-start gap-1.5">
+                          <span className="text-cyan-400">•</span>
+                          <span>{claim}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-between pt-2">
@@ -483,30 +631,55 @@ export function LeadDetailModal({
           {/* OUTREACH TAB */}
           {activeTab === "outreach" && (
             <div className="space-y-4">
-              <div className="rounded-xl border border-white/5 bg-black/20 p-4">
+              <div className="rounded-xl border border-white/5 bg-black/20 p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase tracking-wider text-emerald-300 font-semibold">WhatsApp 3-Part Introduction</span>
+                  <div className="flex items-center gap-2">
+                    <MessageCircle size={15} className="text-emerald-400" />
+                    <span className="text-[10px] uppercase tracking-wider text-emerald-300 font-semibold">
+                      Hunter: Hyper-Personalized WhatsApp Outreach (wa.me)
+                    </span>
+                  </div>
                   {lead.phone && (
-                    <a
-                      href={whatsappUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-emerald-300 hover:underline flex items-center gap-1"
+                    <button
+                      type="button"
+                      onClick={handleWhatsAppDispatch}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/30 transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)]"
                     >
-                      <Send size={11} /> Open in WhatsApp Web
-                    </a>
+                      <Send size={12} /> Send via WhatsApp (wa.me)
+                    </button>
                   )}
                 </div>
-                <div className="mt-2 whitespace-pre-wrap rounded-lg bg-black/30 p-3 font-mono text-xs text-slate-200 leading-relaxed border border-white/5">
-                  {lead.outreachDrafts?.whatsapp || "No draft generated yet. Click 'Generate Outreach' in Hunter actions."}
+
+                <div className="whitespace-pre-wrap rounded-lg bg-black/35 p-3.5 font-mono text-xs text-slate-200 leading-relaxed border border-white/5">
+                  {lead.outreachDrafts?.whatsapp || generateHunterPitch(lead).whatsappPitch}
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                  <span>Formatted for Gujarat commercial decision maker.</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newPitch = generateHunterPitch(lead).whatsappPitch;
+                      onUpdateLead({
+                        ...lead,
+                        outreachDrafts: { ...(lead.outreachDrafts || {}), whatsapp: newPitch },
+                      });
+                      notify("Hunter re-calibrated pitch with latest audit findings.");
+                    }}
+                    className="text-cyan-400 hover:underline"
+                  >
+                    Refresh Copy
+                  </button>
                 </div>
               </div>
 
               {lead.outreachDrafts?.email && (
-                <div className="rounded-xl border border-white/5 bg-black/20 p-4">
-                  <div className="text-[10px] uppercase tracking-wider text-cyan-300 font-semibold">Email Outreach Draft</div>
-                  <div className="mt-2 text-xs font-semibold text-white">Subject: {lead.outreachDrafts.email.subject}</div>
-                  <div className="mt-2 whitespace-pre-wrap rounded-lg bg-black/30 p-3 font-mono text-xs text-slate-200 leading-relaxed border border-white/5">
+                <div className="rounded-xl border border-white/5 bg-black/20 p-4 space-y-2">
+                  <div className="text-[10px] uppercase tracking-wider text-cyan-300 font-semibold flex items-center gap-2">
+                    <Mail size={13} /> Email Outreach Sequence
+                  </div>
+                  <div className="text-xs font-semibold text-white">Subject: {lead.outreachDrafts.email.subject}</div>
+                  <div className="whitespace-pre-wrap rounded-lg bg-black/30 p-3 font-mono text-xs text-slate-200 leading-relaxed border border-white/5">
                     {lead.outreachDrafts.email.body}
                   </div>
                 </div>

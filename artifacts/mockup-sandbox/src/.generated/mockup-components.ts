@@ -3,6 +3,7 @@ type ModuleMap = Record<string, () => Promise<Record<string, unknown>>>;
 export const modules: ModuleMap = {
   "./components/mockups/yuvi/YuviOS.tsx": () => import("../components/mockups/yuvi/YuviOS.tsx"),
   "./components/mockups/yuvi/components/AddLeadModal.tsx": () => import("../components/mockups/yuvi/components/AddLeadModal.tsx"),
+  "./components/mockups/yuvi/components/AgentCustomizationDeck.tsx": () => import("../components/mockups/yuvi/components/AgentCustomizationDeck.tsx"),
   "./components/mockups/yuvi/components/AITeamView.tsx": () => import("../components/mockups/yuvi/components/AITeamView.tsx"),
   "./components/mockups/yuvi/components/ApprovalsView.tsx": () => import("../components/mockups/yuvi/components/ApprovalsView.tsx"),
   "./components/mockups/yuvi/components/CallModal.tsx": () => import("../components/mockups/yuvi/components/CallModal.tsx"),
