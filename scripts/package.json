@@ -16,6 +16,7 @@
     "test:sales": "tsx ./src/test-sales-engine.ts",
     "test:sprint3": "tsx ./src/test-sprint3-verification.ts",
     "test:groq": "tsx ./src/test-groq-security.ts",
+    "test:crm-finance": "tsx ./src/test-crm-delivery-finance.ts",
     "test:autonomous": "tsx ./src/test-autonomous-sprints.ts",
     "demo:leads": "tsx ./src/generate-demo-leads.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
