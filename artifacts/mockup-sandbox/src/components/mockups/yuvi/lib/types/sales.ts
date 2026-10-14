@@ -277,6 +277,19 @@ export interface ClientAccount {
   deliverables: ClientDeliverable[];
   milestones: ClientMilestone[];
   nextAction?: { title: string; dueDate: string };
+  // Phase 5 Money & Project Navigator Fields
+  projectStage?: "INTAKE" | "BRIEF" | "DESIGN" | "BUILD" | "REVIEW" | "LIVE" | "HANDOVER";
+  advancePayment?: {
+    advanceReceived: boolean;
+    utrReference?: string;
+    amountPaid?: number;
+    verifiedAt?: string;
+    notes?: string;
+  };
+  packageId?: string;
+  packageName?: string;
+  turnaroundHours?: number;
+  deliveryDeadline?: string;
   notes: string;
   createdAt: string;
   updatedAt: string;
