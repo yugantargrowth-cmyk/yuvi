@@ -50,7 +50,7 @@ export const DEFAULT_TRIAGE_RULESET: TriageRuleset = {
     "subway",
     "reliance",
     "tata",
-    "maruti",
+    "maruti suzuki",
     "honda",
     "hyundai",
     "pantaloons",

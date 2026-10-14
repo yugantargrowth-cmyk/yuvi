@@ -201,6 +201,9 @@ export function analyzeLeadNeeds(lead: NormalizedLead): NeedsAnalysisResult {
 
   const hasSpeedOrUxLeak = topLeaks.some((l) =>
     l.leak.toLowerCase().includes("speed") ||
+    l.leak.toLowerCase().includes("latency") ||
+    l.leak.toLowerCase().includes("load") ||
+    l.leak.toLowerCase().includes("lcp") ||
     l.leak.toLowerCase().includes("whatsapp") ||
     l.leak.toLowerCase().includes("http") ||
     l.leak.toLowerCase().includes("responsive"),

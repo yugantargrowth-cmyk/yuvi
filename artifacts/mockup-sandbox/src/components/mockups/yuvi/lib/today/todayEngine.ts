@@ -72,7 +72,7 @@ export function computeTodayMetrics(
   ).length;
 
   const inboundRepliesCount = leads.filter(
-    (l) => l.status === "REPLIED" || l.status === "CALLBACK" || l.status === "INTERESTED",
+    (l) => l.status === "REPLIED" || l.status === "CALLBACK" || l.status === "INTERESTED" || l.status === "MEETING_SCHEDULED",
   ).length;
 
   return {
@@ -155,7 +155,7 @@ export function determineNextAction(
 
   // 3. High Priority: Inbound Prospect Reply Awaiting Callback
   const repliedLead = leads.find(
-    (l) => l.status === "INTERESTED" || l.status === "CALLBACK" || l.status === "REPLIED",
+    (l) => l.status === "INTERESTED" || l.status === "CALLBACK" || l.status === "REPLIED" || l.status === "MEETING_SCHEDULED",
   );
   if (repliedLead) {
     return {
@@ -231,7 +231,7 @@ export function getActionQueues(
   );
 
   const replyQueue = leads.filter(
-    (l) => l.status === "INTERESTED" || l.status === "CALLBACK" || l.status === "REPLIED",
+    (l) => l.status === "INTERESTED" || l.status === "CALLBACK" || l.status === "REPLIED" || l.status === "MEETING_SCHEDULED",
   );
 
   const moneyQueue = clients.filter(

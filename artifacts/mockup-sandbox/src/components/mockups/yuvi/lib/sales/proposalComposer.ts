@@ -23,6 +23,7 @@ export interface ProposalCompositionOptions {
   gstRate?: number;
   customTerms?: string;
   advancePercentage?: number;
+  founderName?: string;
 }
 
 export const YUGANTAR_THEME = {
