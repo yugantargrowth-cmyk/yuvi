@@ -130,11 +130,44 @@ export interface NormalizedLead {
   };
   // Extended CRM Metadata
   owner?: string;
+  owner_id?: string;
   source?: string;
   dealValue?: number;
   lastContact?: string;
   tasks?: LeadTask[];
   activityHistory?: LeadActivity[];
+  // Phase 1 Lead Factory Additions
+  address?: string;
+  rating?: number;
+  reviewCount?: number;
+  mapsUrl?: string;
+  instagram?: string;
+  triage?: LeadTriage;
+}
+
+export interface LeadTriage {
+  fitScore: number;
+  reasons: string[];
+  decision: "qualified" | "maybe" | "skip";
+  rulesetVersion: string;
+  triagedAt: string;
+}
+
+export interface DedupeReportItem {
+  id: string;
+  companyName: string;
+  phone: string;
+  action: "kept" | "merged" | "dropped";
+  reason: string;
+  mergedWithId?: string;
+}
+
+export interface DedupeReport {
+  totalInput: number;
+  totalKept: number;
+  totalMerged: number;
+  totalDropped: number;
+  items: DedupeReportItem[];
 }
 
 export interface LeadTask {
