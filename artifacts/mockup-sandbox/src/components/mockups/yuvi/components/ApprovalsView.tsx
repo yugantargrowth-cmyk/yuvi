@@ -1,6 +1,6 @@
 // components/ApprovalsView.tsx — Consequential Action Safety Gate
 import React, { useState } from "react";
-import type { LeadTier, NormalizedLead } from "../lib/types/sales";
+import type { LeadTier, NormalizedLead, ApprovalStatus, ApprovalItem } from "../lib/types/sales";
 import { Button, Panel, TierPill, StatusPill, ViewHeading } from "./ui";
 import {
   ShieldCheck, CheckCircle2, XCircle, Edit3, MessageCircle,
@@ -8,23 +8,7 @@ import {
 } from "lucide-react";
 import { isWithinSendingWindow, canSendToday, confirmMarkAsSent } from "../lib/outreach/cadenceEngine";
 
-export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "PUBLISHED / COMPLETED";
-
-export interface ApprovalItem {
-  id: string;
-  type: string;
-  title: string;
-  workspace: string;
-  createdBy: string;
-  timestamp: string;
-  status: ApprovalStatus;
-  description: string;
-  exactMessage?: string;
-  phone?: string;
-  email?: string;
-  leadId?: string;
-  tier?: LeadTier;
-}
+export type { ApprovalStatus, ApprovalItem };
 
 interface ApprovalsViewProps {
   approvals: ApprovalItem[];

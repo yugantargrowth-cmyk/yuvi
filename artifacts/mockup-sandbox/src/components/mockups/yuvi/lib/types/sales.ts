@@ -394,6 +394,25 @@ export interface FinancialSummary {
   };
 }
 
+export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "PUBLISHED / COMPLETED";
+
+export interface ApprovalItem {
+  id: string;
+  type: string;
+  title: string;
+  workspace: string;
+  createdBy: string;
+  timestamp: string;
+  status: ApprovalStatus;
+  description: string;
+  exactMessage?: string;
+  phone?: string;
+  email?: string;
+  leadId?: string;
+  tier?: LeadTier;
+}
+
+
 // ============================================================================
 // AGENT WORKFORCE & CUSTOMIZATION TYPES
 // ============================================================================

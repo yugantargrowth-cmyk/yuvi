@@ -4,6 +4,7 @@ import type { LeadTier } from "../lib/types/sales";
 import { ArrowUpRight, type LucideIcon } from "lucide-react";
 
 export type View =
+  | "Today"
   | "Dashboard"
   | "Approvals"
   | "Chat"

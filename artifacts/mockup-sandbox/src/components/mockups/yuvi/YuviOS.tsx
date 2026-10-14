@@ -10,6 +10,7 @@ import { Avatar, Panel, TierPill, StatusPill } from "./components/ui";
 
 // View Components
 import { DashboardView } from "./components/DashboardView";
+import { TodayView } from "./components/TodayView";
 import { LeadsView } from "./components/LeadsView";
 import { PipelineView } from "./components/PipelineView";
 import { ClientsView } from "./components/ClientsView";
@@ -28,7 +29,7 @@ import { AddLeadModal } from "./components/AddLeadModal";
 import { CallModal } from "./components/CallModal";
 
 import {
-  Home, BadgeCheck, MessageSquare, Bot, Target, KanbanSquare,
+  Home, Calendar, BadgeCheck, MessageSquare, Bot, Target, KanbanSquare,
   UsersRound, Database, FileBarChart, Settings2, Menu, Bell,
   Plus, X, ChevronDown, Radio, ShieldCheck, Check, FileText, IndianRupee
 } from "lucide-react";
@@ -48,6 +49,7 @@ import { auditLead } from "./lib/research/leadResearcher";
 import { syncAllTablesWithSupabase } from "./lib/supabaseClient";
 
 const VALID_VIEWS: View[] = [
+  "Today",
   "Dashboard",
   "Approvals",
   "Chat",
@@ -63,6 +65,7 @@ const VALID_VIEWS: View[] = [
 ];
 
 const nav: { name: View; icon: typeof Home; group?: string }[] = [
+  { name: "Today", icon: Calendar, group: "Daily Operations" },
   { name: "Dashboard", icon: Home, group: "Workspace" },
   { name: "Approvals", icon: BadgeCheck },
   { name: "Chat", icon: MessageSquare },
@@ -446,7 +449,7 @@ const css = `
 `;
 
 export function YuviOS() {
-  const [view, setView] = useState<View>("Dashboard");
+  const [view, setView] = useState<View>("Today");
   const [sidebar, setSidebar] = useState(false);
   const [userMenu, setUserMenu] = useState(false);
   const [locked, setLocked] = useState(false);
@@ -762,6 +765,24 @@ export function YuviOS() {
   // Active View Renderer
   const renderCurrentView = () => {
     switch (view) {
+      case "Today":
+        return (
+          <TodayView
+            invoices={invoices}
+            clients={clients}
+            leads={leads}
+            approvals={approvals}
+            onNavigateToView={navigateTo}
+            onSelectLead={setSelectedLeadForDetail}
+            onSelectClient={c => {
+              navigateTo("Clients");
+            }}
+            onSelectApproval={a => {
+              navigateTo("Approvals");
+            }}
+            notify={notify}
+          />
+        );
       case "Dashboard":
         return (
           <DashboardView
@@ -1125,9 +1146,36 @@ export function YuviOS() {
         />
       )}
 
+      {/* MOBILE BOTTOM NAVIGATION BAR (Thumb Ergonomics) */}
+      <nav aria-label="Mobile Navigation" className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#080808]/95 backdrop-blur-md border-t border-white/10 px-2 py-1.5 flex items-center justify-around">
+        {[
+          { name: "Today" as View, icon: Calendar, label: "Today" },
+          { name: "Leads" as View, icon: Target, label: "Leads" },
+          { name: "Approvals" as View, icon: BadgeCheck, label: "Approvals" },
+          { name: "Clients" as View, icon: UsersRound, label: "Projects" },
+          { name: "Finance" as View, icon: IndianRupee, label: "Money" },
+        ].map(tab => {
+          const Icon = tab.icon;
+          const isActive = view === tab.name;
+          return (
+            <button
+              key={tab.name}
+              type="button"
+              onClick={() => navigateTo(tab.name)}
+              className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all cursor-pointer ${
+                isActive ? "text-[#e8520a] font-bold" : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Icon size={18} className={isActive ? "stroke-[2.5]" : "stroke-[1.75]"} />
+              <span className="text-[10px] mt-0.5">{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
       {/* Global Toast */}
       {toast && (
-        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl border border-violet-400/30 bg-[#0d0f2b] px-4 py-3 text-xs font-semibold text-white shadow-2xl backdrop-blur-md animate-bounce">
+        <div className="fixed bottom-16 sm:bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl border border-violet-400/30 bg-[#0d0f2b] px-4 py-3 text-xs font-semibold text-white shadow-2xl backdrop-blur-md animate-bounce">
           <span className="h-2 w-2 rounded-full bg-cyan-400" />
           <span>{toast}</span>
         </div>
