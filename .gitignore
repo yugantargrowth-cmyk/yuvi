@@ -58,3 +58,11 @@ supabase/.temp/
 activepieces/
 brahma_reference/
 *.pptx
+
+# Lead CSVs, raw prospect datasets and demo data
+/data
+/data/*
+data/
+*.csv
+docs/sprint/demo/*
+!docs/sprint/demo/README.md
