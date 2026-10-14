@@ -309,6 +309,14 @@ export interface CommercialProposal {
   paymentTerms: string;
   deliverables: string[];
   notes?: string;
+  topLeaks?: Array<{ leak: string; evidenceId: string; source: string; label: "VERIFIED" | "OBSERVED"; impact: string }>;
+  evidenceIds?: string[];
+  advancePercentage?: number;
+  advanceAmount?: number;
+  outreachPitches?: {
+    whatsappHinglish: string;
+    coldEmail: { subject: string; body: string };
+  };
 }
 
 export interface InvoiceItem {
