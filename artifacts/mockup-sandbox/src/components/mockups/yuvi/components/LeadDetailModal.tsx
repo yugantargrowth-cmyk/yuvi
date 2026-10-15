@@ -525,17 +525,21 @@ export function LeadDetailModal({
                   <div className="rounded-lg border border-white/5 bg-black/30 p-2.5 text-center">
                     <div className="text-[10px] text-slate-400 uppercase">Mobile Speed</div>
                     <div className={`mt-0.5 font-mono text-sm font-bold ${
-                      (lead.speedSeconds || 3.8) <= 2.0 ? "text-emerald-400" : "text-amber-400"
+                      lead.speedSeconds !== undefined
+                        ? (lead.speedSeconds <= 2.0 ? "text-emerald-400" : "text-amber-400")
+                        : "text-slate-400 font-normal"
                     }`}>
-                      {lead.speedSeconds ? `${lead.speedSeconds.toFixed(1)}s` : "3.8s (Est.)"}
+                      {lead.speedSeconds !== undefined ? `${lead.speedSeconds.toFixed(1)}s` : "Not measured"}
                     </div>
                     <div className="text-[9px] text-slate-500">Sub-2.0s Required</div>
                   </div>
 
                   <div className="rounded-lg border border-white/5 bg-black/30 p-2.5 text-center">
                     <div className="text-[10px] text-slate-400 uppercase">Mobile UX</div>
-                    <div className="mt-0.5 text-xs font-semibold text-cyan-300">
-                      {lead.mobileAudit?.responsive !== false ? "Responsive" : "Non-Responsive"}
+                    <div className={`mt-0.5 text-xs font-semibold ${
+                      lead.mobileAudit ? "text-cyan-300" : "text-slate-400 font-normal"
+                    }`}>
+                      {lead.mobileAudit ? (lead.mobileAudit.responsive !== false ? "Responsive" : "Non-Responsive") : "Not measured"}
                     </div>
                     <div className="text-[9px] text-slate-500">Viewport Health</div>
                   </div>
@@ -543,17 +547,21 @@ export function LeadDetailModal({
                   <div className="rounded-lg border border-white/5 bg-black/30 p-2.5 text-center">
                     <div className="text-[10px] text-slate-400 uppercase">WhatsApp CTA</div>
                     <div className={`mt-0.5 text-xs font-semibold ${
-                      lead.mobileAudit?.hasWhatsAppCta ? "text-emerald-400" : "text-red-400"
+                      lead.mobileAudit
+                        ? (lead.mobileAudit.hasWhatsAppCta ? "text-emerald-400" : "text-red-400")
+                        : "text-slate-400 font-normal"
                     }`}>
-                      {lead.mobileAudit?.hasWhatsAppCta ? "Detected" : "Missing / Leak"}
+                      {lead.mobileAudit ? (lead.mobileAudit.hasWhatsAppCta ? "Detected" : "Missing / Leak") : "Not measured"}
                     </div>
                     <div className="text-[9px] text-slate-500">Instant Lead Capture</div>
                   </div>
 
                   <div className="rounded-lg border border-white/5 bg-black/30 p-2.5 text-center">
                     <div className="text-[10px] text-slate-400 uppercase">SSL Protocol</div>
-                    <div className="mt-0.5 text-xs font-semibold text-emerald-400">
-                      {lead.websiteUrl?.startsWith("http://") ? "HTTP (Insecure)" : "HTTPS Encrypted"}
+                    <div className={`mt-0.5 text-xs font-semibold ${
+                      lead.websiteUrl ? (lead.websiteUrl.startsWith("http://") ? "text-red-400" : "text-emerald-400") : "text-slate-400 font-normal"
+                    }`}>
+                      {lead.websiteUrl ? (lead.websiteUrl.startsWith("http://") ? "HTTP (Insecure)" : "HTTPS Encrypted") : "Not measured"}
                     </div>
                     <div className="text-[9px] text-slate-500">Enterprise Trust</div>
                   </div>
@@ -565,7 +573,7 @@ export function LeadDetailModal({
                     <AlertTriangle size={13} /> Commercial Revenue Leak
                   </div>
                   <div className="text-xs text-slate-200">
-                    {lead.bottleneck || "High-value commercial operations currently leaking >50% of mobile inquiries due to unoptimized load speeds and lack of direct conversational booking."}
+                    {lead.bottleneck || "Not measured"}
                   </div>
                 </div>
 
@@ -573,14 +581,14 @@ export function LeadDetailModal({
                 <div className="rounded-lg border border-emerald-500/25 bg-emerald-950/20 p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
-                      <Zap size={13} /> Recommended Growth Playbook: {lead.growthPlaybook?.packageName || lead.recommendedService || "Fast Web Dev (48h, Sub-2s Load) & AI WhatsApp Engine"}
+                      <Zap size={13} /> Recommended Growth Playbook: {lead.growthPlaybook?.packageName || lead.recommendedService || "Digital Foundation"}
                     </span>
                     <span className="text-[10px] font-mono text-emerald-400 font-semibold">
                       Timeline: {lead.growthPlaybook?.setupTimeline || "48 Hours"}
                     </span>
                   </div>
                   <div className="text-xs text-slate-300">
-                    {lead.growthPlaybook?.description || "Headless web reconstruction paired with 24/7 automated WhatsApp inquiry qualification."}
+                    {lead.growthPlaybook?.description || "Sub-2.0s mobile-first conversion landing page with instant 1-click WhatsApp lead capture concierge."}
                   </div>
                   <div className="flex flex-wrap items-center gap-3 text-[11px] text-emerald-200 pt-1">
                     <span><b>Projected Lift:</b> {lead.growthPlaybook?.estimatedLift || "+40% to +65% Mobile Inquiry Lift"}</span>
@@ -654,7 +662,7 @@ export function LeadDetailModal({
                 </div>
               </div>
 
-              {/* 4 Multi-Source Pillar Cards */}
+              {/* 4 Multi-Source Pillar Cards with Per-Source Status */}
               <div className="grid gap-3 sm:grid-cols-2">
                 {/* 1. Website Scan */}
                 <div className="rounded-xl border border-white/10 bg-black/30 p-3.5 space-y-2">
@@ -662,27 +670,46 @@ export function LeadDetailModal({
                     <div className="flex items-center gap-1.5 text-xs font-bold text-white">
                       <Globe size={14} className="text-cyan-400" /> Server Website Scan
                     </div>
-                    <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-emerald-400/30 bg-emerald-400/10 text-emerald-300 font-bold">
-                      VERIFIED
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {lead.sourceStatus?.websiteScan ? (
+                        <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded border font-bold uppercase ${
+                          lead.sourceStatus.websiteScan.status === "ok"
+                            ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+                            : lead.sourceStatus.websiteScan.status === "not configured"
+                            ? "border-amber-400/30 bg-amber-400/10 text-amber-300"
+                            : "border-red-400/30 bg-red-400/10 text-red-300"
+                        }`}>
+                          {lead.sourceStatus.websiteScan.status}
+                        </span>
+                      ) : (
+                        <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-slate-500/30 bg-slate-500/10 text-slate-400">
+                          PENDING
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  {lead.sourceStatus?.websiteScan?.reason && (
+                    <div className="text-[10px] text-red-300/80 bg-red-950/30 px-2 py-1 rounded border border-red-500/20">
+                      Reason: {lead.sourceStatus.websiteScan.reason}
+                    </div>
+                  )}
                   <div className="space-y-1.5 text-[11px]">
                     <div className="flex justify-between text-slate-300">
                       <span className="text-slate-400">SSL / HTTPS:</span>
-                      <span className={lead.websiteUrl?.startsWith("http://") ? "text-red-400 font-semibold" : "text-emerald-400 font-semibold"}>
-                        {lead.websiteUrl?.startsWith("http://") ? "Insecure HTTP (Leak)" : "Valid SSL Active"}
+                      <span className={lead.websiteUrl ? (lead.websiteUrl.startsWith("http://") ? "text-red-400 font-semibold" : "text-emerald-400 font-semibold") : "text-slate-400"}>
+                        {lead.websiteUrl ? (lead.websiteUrl.startsWith("http://") ? "Insecure HTTP (Leak)" : "Valid SSL Active") : "Not measured"}
                       </span>
                     </div>
                     <div className="flex justify-between text-slate-300">
                       <span className="text-slate-400">Mobile Viewport:</span>
-                      <span className={lead.mobileAudit?.responsive !== false ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>
-                        {lead.mobileAudit?.responsive !== false ? "Responsive Meta Tag" : "Legacy Desktop"}
+                      <span className={lead.mobileAudit ? (lead.mobileAudit.responsive !== false ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold") : "text-slate-400"}>
+                        {lead.mobileAudit ? (lead.mobileAudit.responsive !== false ? "Responsive Meta Tag" : "Legacy Desktop") : "Not measured"}
                       </span>
                     </div>
                     <div className="flex justify-between text-slate-300">
                       <span className="text-slate-400">Floating WhatsApp CTA:</span>
-                      <span className={lead.mobileAudit?.hasWhatsAppCta ? "text-emerald-400 font-semibold" : "text-amber-400 font-semibold"}>
-                        {lead.mobileAudit?.hasWhatsAppCta ? "Detected" : "Missing / Leak"}
+                      <span className={lead.mobileAudit ? (lead.mobileAudit.hasWhatsAppCta ? "text-emerald-400 font-semibold" : "text-amber-400 font-semibold") : "text-slate-400"}>
+                        {lead.mobileAudit ? (lead.mobileAudit.hasWhatsAppCta ? "Detected" : "Missing / Leak") : "Not measured"}
                       </span>
                     </div>
                   </div>
@@ -694,25 +721,41 @@ export function LeadDetailModal({
                     <div className="flex items-center gap-1.5 text-xs font-bold text-white">
                       <Zap size={14} className="text-amber-400" /> Google PageSpeed (Mobile)
                     </div>
-                    <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-emerald-400/30 bg-emerald-400/10 text-emerald-300 font-bold">
-                      VERIFIED
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {lead.sourceStatus?.pageSpeed ? (
+                        <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded border font-bold uppercase ${
+                          lead.sourceStatus.pageSpeed.status === "ok"
+                            ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+                            : lead.sourceStatus.pageSpeed.status === "not configured"
+                            ? "border-amber-400/30 bg-amber-400/10 text-amber-300"
+                            : "border-red-400/30 bg-red-400/10 text-red-300"
+                        }`}>
+                          {lead.sourceStatus.pageSpeed.status}
+                        </span>
+                      ) : (
+                        <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-slate-500/30 bg-slate-500/10 text-slate-400">
+                          PENDING
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  {lead.sourceStatus?.pageSpeed?.reason && (
+                    <div className="text-[10px] text-amber-300/80 bg-amber-950/30 px-2 py-1 rounded border border-amber-500/20">
+                      Reason: {lead.sourceStatus.pageSpeed.reason}
+                    </div>
+                  )}
                   <div className="space-y-1.5 text-[11px]">
                     <div className="flex justify-between text-slate-300">
                       <span className="text-slate-400">Mobile Speed Score:</span>
-                      <span className="font-mono font-bold text-amber-400">
-                        {lead.mobileAudit?.speedScore ? `${lead.mobileAudit.speedScore}/100` : "60/100 (Est.)"}
+                      <span className={`font-mono font-bold ${lead.mobileAudit?.speedScore ? "text-amber-400" : "text-slate-400"}`}>
+                        {lead.mobileAudit?.speedScore ? `${lead.mobileAudit.speedScore}/100` : "Not measured"}
                       </span>
                     </div>
                     <div className="flex justify-between text-slate-300">
                       <span className="text-slate-400">LCP Latency:</span>
-                      <span className="font-mono font-bold text-amber-400">
-                        {lead.speedSeconds ? `${lead.speedSeconds.toFixed(1)}s` : "3.8s"}
+                      <span className={`font-mono font-bold ${lead.speedSeconds !== undefined ? "text-amber-400" : "text-slate-400"}`}>
+                        {lead.speedSeconds !== undefined ? `${lead.speedSeconds.toFixed(1)}s` : "Not measured"}
                       </span>
-                    </div>
-                    <div className="text-[10px] text-slate-500">
-                      * If Google PageSpeed API key is unset, server runs mobile payload latency test.
                     </div>
                   </div>
                 </div>
@@ -723,21 +766,40 @@ export function LeadDetailModal({
                     <div className="flex items-center gap-1.5 text-xs font-bold text-white">
                       <MapPin size={14} className="text-emerald-400" /> Google Business Places
                     </div>
-                    <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-emerald-400/30 bg-emerald-400/10 text-emerald-300 font-bold">
-                      VERIFIED
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {lead.sourceStatus?.places ? (
+                        <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded border font-bold uppercase ${
+                          lead.sourceStatus.places.status === "ok"
+                            ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+                            : lead.sourceStatus.places.status === "not configured"
+                            ? "border-amber-400/30 bg-amber-400/10 text-amber-300"
+                            : "border-red-400/30 bg-red-400/10 text-red-300"
+                        }`}>
+                          {lead.sourceStatus.places.status}
+                        </span>
+                      ) : (
+                        <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-slate-500/30 bg-slate-500/10 text-slate-400">
+                          PENDING
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  {lead.sourceStatus?.places?.reason && (
+                    <div className="text-[10px] text-amber-300/80 bg-amber-950/30 px-2 py-1 rounded border border-amber-500/20">
+                      Reason: {lead.sourceStatus.places.reason}
+                    </div>
+                  )}
                   <div className="space-y-1.5 text-[11px]">
                     <div className="flex justify-between text-slate-300">
                       <span className="text-slate-400">Google Rating:</span>
                       <span className="font-mono font-bold text-emerald-400">
-                        {lead.rating ? `${lead.rating} ⭐` : "Not listed"}
+                        {lead.rating ? `${lead.rating} ⭐` : "Not measured"}
                       </span>
                     </div>
                     <div className="flex justify-between text-slate-300">
                       <span className="text-slate-400">Public Reviews:</span>
                       <span className="font-mono text-slate-200">
-                        {lead.reviewCount !== undefined ? `${lead.reviewCount} reviews` : "0 reviews"}
+                        {lead.reviewCount !== undefined ? `${lead.reviewCount} reviews` : "Not measured"}
                       </span>
                     </div>
                     {lead.mapsUrl && (

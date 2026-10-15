@@ -150,6 +150,11 @@ export interface NormalizedLead {
   followUpDate?: string;
   cadenceStep?: string;
   nextCadenceDate?: string;
+  sourceStatus?: {
+    websiteScan?: { status: "ok" | "not configured" | "failed"; reason?: string };
+    pageSpeed?: { status: "ok" | "not configured" | "failed"; reason?: string };
+    places?: { status: "ok" | "not configured" | "failed"; reason?: string };
+  };
 }
 
 export interface LeadTriage {

@@ -19,6 +19,11 @@ export interface MultiSourceResearchResult {
     pageSpeed: boolean;
     places: boolean;
   };
+  sourceStatus: {
+    websiteScan: { status: "ok" | "not configured" | "failed"; reason?: string };
+    pageSpeed: { status: "ok" | "not configured" | "failed"; reason?: string };
+    places: { status: "ok" | "not configured" | "failed"; reason?: string };
+  };
 }
 
 /**
@@ -44,6 +49,12 @@ export async function runMultiSourceResearch(
     places: false,
   };
 
+  const sourceStatus: MultiSourceResearchResult["sourceStatus"] = {
+    websiteScan: { status: "not configured", reason: "No website URL provided" },
+    pageSpeed: { status: "not configured", reason: "PAGESPEED_API_KEY not configured or no website URL" },
+    places: { status: "not configured", reason: "GOOGLE_PLACES_API_KEY not configured" },
+  };
+
   // 1. Server-side Website Scan
   if (targetUrl) {
     try {
@@ -54,9 +65,19 @@ export async function runMultiSourceResearch(
       });
       if (scanRes.ok) {
         scanData = await scanRes.json();
+        sourceStatus.websiteScan = { status: "ok" };
+      } else {
+        const errJson = await scanRes.json().catch(() => ({}));
+        sourceStatus.websiteScan = {
+          status: "failed",
+          reason: errJson.error || `HTTP ${scanRes.status} ${scanRes.statusText}`,
+        };
       }
-    } catch {
-      // Graceful isolation: website unreachable
+    } catch (err: any) {
+      sourceStatus.websiteScan = {
+        status: "failed",
+        reason: err?.message || String(err),
+      };
     }
   }
 
@@ -71,12 +92,32 @@ export async function runMultiSourceResearch(
       if (psRes.ok) {
         const psJson = await psRes.json();
         configuredStatus.pageSpeed = psJson.configured !== false;
-        if (psJson.ok) {
+        if (psJson.configured === false) {
+          sourceStatus.pageSpeed = {
+            status: "not configured",
+            reason: psJson.reason || "PAGESPEED_API_KEY is not configured",
+          };
+        } else if (psJson.ok) {
           pageSpeedData = psJson;
+          sourceStatus.pageSpeed = { status: "ok" };
+        } else {
+          sourceStatus.pageSpeed = {
+            status: "failed",
+            reason: psJson.error || "PageSpeed measurement failed",
+          };
         }
+      } else {
+        const errJson = await psRes.json().catch(() => ({}));
+        sourceStatus.pageSpeed = {
+          status: "failed",
+          reason: errJson.error || `HTTP ${psRes.status} ${psRes.statusText}`,
+        };
       }
-    } catch {
-      // Graceful isolation
+    } catch (err: any) {
+      sourceStatus.pageSpeed = {
+        status: "failed",
+        reason: err?.message || String(err),
+      };
     }
   }
 
@@ -94,20 +135,44 @@ export async function runMultiSourceResearch(
     if (placesRes.ok) {
       const placesJson = await placesRes.json();
       configuredStatus.places = placesJson.configured !== false;
-      if (placesJson.ok) {
+      if (placesJson.configured === false) {
+        sourceStatus.places = {
+          status: "not configured",
+          reason: placesJson.reason || "GOOGLE_PLACES_API_KEY is not configured",
+        };
+      } else if (placesJson.ok) {
         placesData = placesJson;
+        sourceStatus.places = { status: "ok" };
+      } else {
+        sourceStatus.places = {
+          status: "failed",
+          reason: placesJson.error || placesJson.reason || "No matching Google Place found",
+        };
       }
+    } else {
+      const errJson = await placesRes.json().catch(() => ({}));
+      sourceStatus.places = {
+        status: "failed",
+        reason: errJson.error || `HTTP ${placesRes.status} ${placesRes.statusText}`,
+      };
     }
-  } catch {
-    // Graceful isolation
+  } catch (err: any) {
+    sourceStatus.places = {
+      status: "failed",
+      reason: err?.message || String(err),
+    };
   }
 
-  // Fallback Places Data from CSV if Places API is not configured
+  // Fallback Places Data from CSV if Places API is not configured (Item 4: marked as CSV import)
+  let isCsvPlaces = false;
   if (!placesData && (lead.rating !== undefined || lead.reviewCount !== undefined)) {
+    isCsvPlaces = true;
     placesData = {
       rating: lead.rating,
       reviewCount: lead.reviewCount,
       address: lead.address,
+      isCsvImport: true,
+      importedDate: lead.createdAt ? lead.createdAt.split("T")[0] : new Date().toISOString().split("T")[0],
     };
   }
 
@@ -121,18 +186,21 @@ export async function runMultiSourceResearch(
     options?.socialSnapshot,
   );
 
-  // Derive Audit Score & Bottleneck
-  let auditScore = 70;
-  if (scanData) {
-    if (!scanData.isHttps) auditScore -= 20;
-    if (!scanData.hasWhatsAppCta) auditScore -= 15;
-    if (!scanData.hasMobileViewport) auditScore -= 20;
-    if (!scanData.tracking?.ga4 && !scanData.tracking?.metaPixel) auditScore -= 15;
+  // Derive Audit Score & Bottleneck — ONLY when measured (Item 3: no invented defaults)
+  let auditScore: number | undefined = undefined;
+  if (scanData || pageSpeedData?.mobileScore !== undefined) {
+    let score = 100;
+    if (scanData) {
+      if (!scanData.isHttps) score -= 20;
+      if (!scanData.hasWhatsAppCta) score -= 15;
+      if (!scanData.hasMobileViewport) score -= 20;
+      if (!scanData.tracking?.ga4 && !scanData.tracking?.metaPixel) score -= 15;
+    }
+    if (pageSpeedData?.mobileScore !== undefined) {
+      score = Math.round((score + pageSpeedData.mobileScore) / 2);
+    }
+    auditScore = Math.max(10, Math.min(100, score));
   }
-  if (pageSpeedData?.mobileScore) {
-    auditScore = Math.round((auditScore + pageSpeedData.mobileScore) / 2);
-  }
-  auditScore = Math.max(25, Math.min(95, auditScore));
 
   const commercialLeaks: string[] = [];
   if (scanData && !scanData.isHttps) {
@@ -145,25 +213,36 @@ export async function runMultiSourceResearch(
     commercialLeaks.push(`Mobile Largest Contentful Paint (${pageSpeedData.lcp}) exceeds 2.5s benchmark.`);
   }
 
-  const bottleneck = commercialLeaks[0] || "Mobile conversion funnel unoptimized for Gujarat local B2B prospects.";
+  const bottleneck: string | undefined = commercialLeaks.length > 0 ? commercialLeaks[0] : undefined;
+
+  const speedSeconds: number | undefined = pageSpeedData?.lcp && pageSpeedData.lcp !== "N/A"
+    ? parseFloat(pageSpeedData.lcp) || undefined
+    : undefined;
+
+  const speedScore: number | undefined = pageSpeedData?.mobileScore !== undefined
+    ? pageSpeedData.mobileScore
+    : undefined;
+
+  const mobileAudit = scanData || speedScore !== undefined ? {
+    responsive: scanData ? (scanData.hasMobileViewport ?? true) : false,
+    hasWhatsAppCta: scanData ? (scanData.hasWhatsAppCta ?? false) : false,
+    speedScore: speedScore ?? 0,
+    issues: commercialLeaks,
+  } : undefined;
 
   const updatedLead: NormalizedLead = {
     ...lead,
     auditScore,
-    speedSeconds: pageSpeedData?.lcp ? parseFloat(pageSpeedData.lcp) || 3.5 : 3.5,
-    mobileAudit: {
-      responsive: scanData?.hasMobileViewport ?? true,
-      hasWhatsAppCta: scanData?.hasWhatsAppCta ?? false,
-      speedScore: pageSpeedData?.mobileScore ?? 60,
-      issues: commercialLeaks,
-    },
+    speedSeconds,
+    mobileAudit,
     commercialLeaks,
     bottleneck,
     verifiedClaims: formatEvidenceClaims(evidence),
-    rating: placesData?.rating ?? lead.rating,
-    reviewCount: placesData?.reviewCount ?? lead.reviewCount,
+    rating: isCsvPlaces ? lead.rating : (placesData?.rating ?? lead.rating),
+    reviewCount: isCsvPlaces ? lead.reviewCount : (placesData?.reviewCount ?? lead.reviewCount),
     researchEvidence: evidence,
     socialSnapshot: options?.socialSnapshot || lead.socialSnapshot,
+    sourceStatus,
     updatedAt: new Date().toISOString(),
   };
 
@@ -171,6 +250,7 @@ export async function runMultiSourceResearch(
     lead: updatedLead,
     evidence,
     configuredStatus,
+    sourceStatus,
   };
 }
 
