@@ -324,12 +324,12 @@ CREATE TABLE IF NOT EXISTS settings (
   owner_id text NOT NULL DEFAULT 'owner',
   gst_enabled boolean NOT NULL DEFAULT false,
   gst_rate numeric NOT NULL DEFAULT 18,
-  upi_vpa text NOT NULL DEFAULT 'shlok@upi',
+  upi_vpa text NOT NULL DEFAULT '',
   daily_send_cap integer NOT NULL DEFAULT 30,
   send_window_start text NOT NULL DEFAULT '09:30',
   send_window_end text NOT NULL DEFAULT '19:30',
   goal_amount numeric NOT NULL DEFAULT 25000,
-  goal_period text NOT NULL DEFAULT 'monthly',
+  goal_period text NOT NULL DEFAULT 'one-time',
   max_active_builds integer NOT NULL DEFAULT 2,
   updated_at timestamp with time zone NOT NULL DEFAULT now()
 );

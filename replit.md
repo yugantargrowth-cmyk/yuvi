@@ -68,7 +68,7 @@ Defined in `.env.example` (copy to `.env.local` for development):
 - `SUPABASE_SERVICE_ROLE_KEY`: Service role key (server only, never in browser)
 - `GOOGLE_PLACES_API_KEY`: Google Places API (New) key
 - `PAGESPEED_API_KEY`: Google PageSpeed Insights API key
-- `UPI_VPA`: Founder's UPI ID (default: `shlok@upi`)
+- `UPI_VPA`: Founder's UPI ID (default: empty / unconfigured; payment links blocked if not set)
 - `CRON_SECRET`: Secret token securing Vercel Cron worker
 
 ---

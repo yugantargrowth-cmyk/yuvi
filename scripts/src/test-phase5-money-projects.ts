@@ -25,6 +25,11 @@ import {
   compileContextPackJson,
 } from "../../artifacts/mockup-sandbox/src/components/mockups/yuvi/lib/project/contextPack.js";
 import type { NormalizedLead } from "../../artifacts/mockup-sandbox/src/components/mockups/yuvi/lib/types/sales.js";
+// @ts-ignore
+import app from "../../artifacts/api-server/src/app.js";
+// @ts-ignore
+import upiServerlessHandlerRaw from "../../api/payment/upi.js";
+const upiServerlessHandler = typeof upiServerlessHandlerRaw === "function" ? upiServerlessHandlerRaw : (upiServerlessHandlerRaw as any).default;
 
 let passed = 0;
 let failed = 0;
@@ -96,6 +101,58 @@ try {
     delete process.env.UPI_VPA;
   }
 }
+
+// --- 1b. Real UPI Payment Route Handler Verification ---
+console.log("\n1b. Real UPI Payment Route Handler Verification (/api/payment/upi)");
+const server = app.listen(0);
+const port = (server.address() as any).port;
+const baseUrl = `http://127.0.0.1:${port}`;
+
+// 1. Unconfigured UPI route handler test: blocks payment link and QR
+const unconfRouteRes = await fetch(`${baseUrl}/api/payment/upi`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ amount: 12500, note: "Unconfigured test" }),
+});
+assert(unconfRouteRes.status === 200, "Real UPI route handler returns 200 OK");
+const unconfRouteData = (await unconfRouteRes.json()) as any;
+assert(unconfRouteData.configured === false, "Real UPI route handler indicates configured=false when unconfigured");
+assert(unconfRouteData.vpa === "UPI not configured", "Real UPI route handler returns 'UPI not configured'");
+assert(unconfRouteData.upiUri === "", "Real UPI route handler blocks payment link (empty string)");
+assert(unconfRouteData.qrDataUrl === "", "Real UPI route handler blocks QR code (empty string)");
+
+// 2. Configured UPI route handler test: generates valid URI and QR
+const confRouteRes = await fetch(`${baseUrl}/api/payment/upi`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ amount: 12500, note: "Configured test", vpa: "yugantar@okhdfcbank" }),
+});
+assert(confRouteRes.status === 200, "Real UPI route handler returns 200 OK on configured VPA");
+const confRouteData = (await confRouteRes.json()) as any;
+assert(confRouteData.configured === true, "Real UPI route handler indicates configured=true");
+assert(confRouteData.vpa === "yugantar@okhdfcbank", "Real UPI route handler returns configured VPA");
+assert(confRouteData.upiUri.startsWith("upi://pay?"), "Real UPI route handler generates valid NPCI URI");
+assert(confRouteData.qrDataUrl.startsWith("data:image/svg+xml"), "Real UPI route handler generates valid SVG QR code");
+
+// 3. Status endpoint test
+const statusRes = await fetch(`${baseUrl}/api/payment/upi/status`);
+assert(statusRes.status === 200, "Real UPI status route handler returns 200 OK");
+const statusData = (await statusRes.json()) as any;
+assert(statusData.ok === true, "Real UPI status route handler returns ok=true");
+
+server.close();
+
+// 4. Vercel Serverless Function test
+let vData = "";
+const vRes: any = {
+  statusCode: 200,
+  setHeader: () => {},
+  end: (d: any) => { vData = d; },
+};
+await upiServerlessHandler({ method: "POST", body: { amount: 5000 } } as any, vRes);
+const parsedVData = JSON.parse(vData);
+assert(parsedVData.configured === false, "Vercel UPI serverless handler reports configured=false when unconfigured");
+assert(parsedVData.vpa === "UPI not configured", "Vercel UPI serverless handler returns 'UPI not configured'");
 
 // --- 2. Bank UTR Reference Validation ---
 console.log("\n2. Bank UTR Reference Validation");
