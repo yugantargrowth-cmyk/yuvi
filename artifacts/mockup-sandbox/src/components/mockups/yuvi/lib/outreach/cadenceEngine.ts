@@ -123,35 +123,62 @@ export function shouldHaltCadence(status: LeadStatus): boolean {
 
 /**
  * Generates the standardized D0, D2, and D5 message drafts for a lead.
+ * Item 8: Only states 48-hour when capacity allows (currentBuildCount < MAX_BUILD_WIP).
+ * No hardcoded times. Lists only findings that exist.
  */
-export function generateCadenceMessages(lead: NormalizedLead): {
+export function generateCadenceMessages(
+  lead: NormalizedLead,
+  options?: { currentBuildCount?: number; maxBuildWip?: number },
+): {
   d0: string;
   d2: string;
   d5: string;
 } {
   const contact = lead.contactPerson ? lead.contactPerson.split(" ")[0] : "ji";
   const company = lead.companyName;
-  const primaryLeak = lead.bottleneck || "mobile load latency aur floating WhatsApp CTA missing hai";
+
+  // List only findings that actually exist in lead.commercialLeaks or researchEvidence
+  const findings: string[] = [];
+  if (lead.commercialLeaks && lead.commercialLeaks.length > 0) {
+    findings.push(...lead.commercialLeaks);
+  } else if (lead.researchEvidence && lead.researchEvidence.length > 0) {
+    findings.push(...lead.researchEvidence.map((e) => `${e.claim}: ${e.value}`));
+  } else if (lead.bottleneck) {
+    findings.push(lead.bottleneck);
+  }
+
+  const primaryLeak = findings.length > 0
+    ? findings[0]
+    : "digital conversion funnel friction";
+
+  const currentBuildCount = options?.currentBuildCount ?? 0;
+  const maxWip = options?.maxBuildWip ?? 2;
+  const capacityAllows = currentBuildCount < maxWip;
+
+  const speedClause = capacityAllows
+    ? "Humne 48-hour turn-around me isko sub-2s aur 1-click WhatsApp concierge se fix karne ka plan banaya hai."
+    : "Humne dedicated sprint me isko sub-2s aur 1-click WhatsApp concierge se fix karne ka plan banaya hai.";
 
   // D0: Initial Touch (<= 6 lines Hinglish)
   const d0 = [
     `Namaste ${contact}, Shlok from Yugantar Growth (Ahmedabad) here.`,
     `Aapki website scan ki toh dekha: ${primaryLeak.slice(0, 110)}.`,
     `Is wajah se high-intent commercial clients inquiry kiye bina bounce ho rahe hain.`,
-    `Humne 48-hour turn-around me isko sub-2s aur 1-click WhatsApp concierge se fix karne ka plan banaya hai.`,
+    speedClause,
     `1-page confidential roadmap PDF ready hai aapke liye.`,
     `Kya main yahan share kar sakta hoon?`,
   ].join("\n");
 
-  // D2: Follow-up 1 (+48 hours nudge)
+  // D2: Follow-up 1 (nudge referencing only findings that exist)
+  const findingSummary = findings.length > 0 ? "observed website bottlenecks" : "digital growth pipeline";
   const d2 = [
-    `Namaste ${contact}, parso jo 1-page growth diagnostic breakdown bheja tha ${company} ke website speed aur WhatsApp capture ke baare me, kya aapko 2 minute mile glance karne ke liye?`,
+    `Namaste ${contact}, jo 1-page growth diagnostic breakdown bheja tha ${company} ke ${findingSummary} ke baare me, kya aapko review karne ka samay mila?`,
     `Agar koi specific feedback ya sawaal ho toh batayiye!`,
   ].join("\n\n");
 
-  // D5: Follow-up 2 / Breakup (+72 hours closure)
+  // D5: Follow-up 2 / Breakup (respectful closure)
   const d5 = [
-    `Namaste ${contact}, lagta hai abhi digital acquisition aur mobile speed aapke liye priority nahi hai. No problem at all!`,
+    `Namaste ${contact}, lagta hai abhi digital acquisition aapke liye priority nahi hai. No problem at all!`,
     `Main yahan se loop close kar raha hoon taaki aapka WhatsApp clutter na ho. All the very best for ${company}!`,
   ].join("\n\n");
 

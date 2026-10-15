@@ -106,7 +106,7 @@ console.log("\n3. D0 / D2 / D5 Cadence Progression & Schedule Intervals");
 
 const messages = generateCadenceMessages(testLead);
 assert(messages.d0.includes("Shlok from Yugantar Growth"), "D0 includes personal Ahmedabad founder intro");
-assert(messages.d2.includes("parso jo 1-page growth diagnostic"), "D2 follows up naturally on parso's diagnostic");
+assert(messages.d2.includes("1-page growth diagnostic breakdown"), "D2 follows up naturally on the diagnostic breakdown");
 assert(messages.d5.includes("loop close kar raha hoon"), "D5 respectfully closes the loop without clutter");
 
 // Confirm D0 sent

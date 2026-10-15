@@ -39,29 +39,51 @@ export function generateWhatsAppDeepLink(phone: string, message: string): string
  */
 export function generateHunterPitch(
   lead: NormalizedLead,
-  customAngle?: string,
+  options?: { customAngle?: string; currentBuildCount?: number; maxBuildWip?: number } | string,
 ): HunterPitchResult {
+  const customAngle = typeof options === "string" ? options : options?.customAngle;
+  const currentBuildCount = typeof options === "object" ? (options.currentBuildCount ?? 0) : 0;
+  const maxWip = typeof options === "object" ? (options.maxBuildWip ?? 2) : 2;
+  const capacityAllows = currentBuildCount < maxWip;
+
   const contact = lead.contactPerson ? lead.contactPerson.split(" ")[0] : "Sir";
   const company = lead.companyName;
   const city = lead.city || "Ahmedabad";
-  const speed = lead.speedSeconds ? `${lead.speedSeconds.toFixed(1)}s` : "4.2s";
-  const bottleneck = lead.bottleneck || "mobile load latency and absence of direct WhatsApp lead capture";
-  const service = lead.recommendedService || lead.primaryService || "Fast Web Dev (48h) & AI WhatsApp Automation";
+
+  const findings: string[] = [];
+  if (lead.commercialLeaks && lead.commercialLeaks.length > 0) {
+    findings.push(...lead.commercialLeaks);
+  } else if (lead.researchEvidence && lead.researchEvidence.length > 0) {
+    findings.push(...lead.researchEvidence.map((e) => `${e.claim}: ${e.value}`));
+  } else if (lead.bottleneck) {
+    findings.push(lead.bottleneck);
+  }
+
+  const primaryFinding = lead.bottleneck || (findings.length > 0 ? findings[0] : "mobile conversion funnel friction");
+
+  const speedObservation = lead.speedSeconds !== undefined
+    ? ` With mobile load times measured at ${lead.speedSeconds.toFixed(1)}s, prospects drop off before inquiring.`
+    : "";
+
+  const service = lead.recommendedService || lead.primaryService || "Digital Foundation & AI WhatsApp Engine";
+  const speedSla = capacityAllows ? "48 hours" : "dedicated sprint";
 
   // Gujarat B2B WhatsApp Copy: Direct, respectful, evidence-based, low friction
   const whatsappPitch = `Hello ${contact}, Shlok here from Yugantar Growth in Ahmedabad.
 
-We were analyzing ${company}'s digital presence across Gujarat. Your commercial portfolio is impressive, but we noticed a major conversion leak on mobile viewports: ${bottleneck}.
+We were analyzing ${company}'s digital presence across Gujarat. We identified a critical conversion finding: ${primaryFinding}.${speedObservation}
 
-With mobile load times averaging ${speed}, over 50% of high-intent prospects drop off before reaching your phone line.
+We address this with our ${service} deployed in ${speedSla} with sub-2.0s speeds and instant WhatsApp consultation capture.
 
-We solve this with our ${service} deployed in 48 hours with guaranteed sub-2.0s speeds and instant WhatsApp consultation capture.
-
-Can I share a 2-minute diagnostic breakdown of the exact friction points we observed on ${company}'s website?`;
+Can I share a brief diagnostic breakdown of the exact friction points we observed on ${company}'s website?`;
 
   const whatsappDeepLink = generateWhatsAppDeepLink(lead.phone, whatsappPitch);
 
   const emailSubject = `Quick observation regarding ${company}'s mobile pipeline in ${city}`;
+
+  const speedBenchmarkLine = lead.speedSeconds !== undefined
+    ? `\n• Benchmark: Mobile latency currently measured at ${lead.speedSeconds.toFixed(1)}s.`
+    : "";
 
   const emailBody = `Dear ${contact},
 
@@ -69,14 +91,12 @@ I hope this finds you well.
 
 My name is Shlok Pandya, founder of Yugantar Growth here in Ahmedabad. We specialize in high-speed web architecture and automated revenue pipelines for high-ticket commercial firms across Gujarat.
 
-While auditing ${company}'s digital touchpoints, our research team identified a critical bottleneck:
-• Observation: ${bottleneck}
-• Benchmark: Mobile latency currently sits at ${speed} (industry standard for conversion is sub-2.0s).
-• Commercial Impact: Significant bounce rates among affluent mobile decision makers in ${city}.
+While auditing ${company}'s digital touchpoints, our research team identified key findings:
+• Observation: ${primaryFinding}${speedBenchmarkLine}
 
-Our solution: ${service}. We rebuild, optimize, and deploy within 48 hours without disrupting existing operations.
+Our solution: ${service}. We rebuild, optimize, and deploy within ${speedSla} without disrupting existing operations.
 
-Would you be open to a brief 10-minute walkthrough this Thursday or Friday to inspect the diagnostic report we prepared for ${company}?
+Would you be open to a brief walkthrough to inspect the diagnostic report we prepared for ${company}?
 
 Warm regards,
 
@@ -85,7 +105,8 @@ Founder, Yugantar Growth
 Ahmedabad, Gujarat
 https://yugantar-growth-drab.vercel.app`;
 
-  const callOpeningHook = `Hello ${contact}, this is Shlok from Yugantar Growth in Ahmedabad. I'm calling specifically regarding ${company}'s website mobile latency — we ran an audit and noticed you're losing over 40% of mobile inquiries due to a ${speed} load time. Do you have 2 minutes to review what we found?`;
+  const speedVal = lead.speedSeconds ? `${lead.speedSeconds.toFixed(1)}s` : "measured";
+  const callOpeningHook = `Hello ${contact}, this is Shlok from Yugantar Growth in Ahmedabad. I'm calling specifically regarding ${company}'s website mobile latency — we ran an audit and noticed you're losing mobile inquiries due to a ${speedVal} load time. Do you have 2 minutes to review what we found?`;
 
   return {
     whatsappPitch,
