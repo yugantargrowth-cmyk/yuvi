@@ -76,6 +76,8 @@ export function synthesizeResearchEvidence(
     reviewCount?: number;
     address?: string;
     photoCount?: number;
+    isCsvImport?: boolean;
+    importedDate?: string;
   },
   socialSnapshot?: SocialSnapshot,
 ): EvidenceItem[] {
@@ -178,18 +180,27 @@ export function synthesizeResearchEvidence(
     }
   }
 
-  // 3. Google Places API Evidence (VERIFIED)
+  // 3. Google Places API Evidence (VERIFIED for live API, OBSERVED with 'imported <date>' for CSV imports)
   if (placesData) {
     if (placesData.rating !== undefined && placesData.rating !== null) {
+      const isCsv = Boolean(placesData.isCsvImport);
+      const importedDate = placesData.importedDate || now.split("T")[0];
+      const claim = isCsv
+        ? `Google Business public rating (imported ${importedDate})`
+        : "Google Business public rating";
+      const value = isCsv
+        ? `${placesData.rating} ⭐ (${placesData.reviewCount || 0} reviews) [imported ${importedDate}]`
+        : `${placesData.rating} ⭐ (${placesData.reviewCount || 0} reviews)`;
+
       items.push({
         id: `ev-places-rating-${leadId}`,
         leadId,
         source: "places",
-        claim: "Google Business public rating",
-        value: `${placesData.rating} ⭐ (${placesData.reviewCount || 0} reviews)`,
-        label: "VERIFIED",
-        confidence: 1.0,
-        fetchedAt: now,
+        claim,
+        value,
+        label: isCsv ? "OBSERVED" : "VERIFIED",
+        confidence: isCsv ? 0.9 : 1.0,
+        fetchedAt: isCsv ? (placesData.importedDate || now) : now,
       });
     }
   }
