@@ -561,34 +561,46 @@ export function ClientsView({
 
               return (
                 <div className="space-y-4">
-                  <div className="rounded-xl border border-white/10 bg-black/50 p-4 text-center space-y-3">
-                    <img
-                      src={upiDetails.qrDataUrl}
-                      alt="UPI QR Code"
-                      className="mx-auto h-44 w-44 rounded-xl border border-white/15 bg-white p-2 shadow-lg"
-                    />
-
-                    <div>
-                      <div className="text-xl font-extrabold font-mono text-emerald-300">
-                        {upiDetails.formattedAmount}
-                      </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
-                        Scan with GPay / PhonePe / Paytm / Cred
+                  {!upiDetails.upiUri ? (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-center space-y-2">
+                      <div className="text-sm font-bold text-amber-300">UPI not configured</div>
+                      <div className="text-xs text-slate-300">
+                        Please set your UPI VPA in Settings or via the <code className="text-white">UPI_VPA</code> environment variable to generate payment links and QR codes.
                       </div>
                     </div>
+                  ) : (
+                    <div className="rounded-xl border border-white/10 bg-black/50 p-4 text-center space-y-3">
+                      <img
+                        src={upiDetails.qrDataUrl}
+                        alt="UPI QR Code"
+                        className="mx-auto h-44 w-44 rounded-xl border border-white/15 bg-white p-2 shadow-lg"
+                      />
 
-                    <div className="pt-2 border-t border-white/5">
-                      <a
-                        href={upiDetails.upiUri}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs font-mono text-[#e8520a] hover:underline"
-                      >
-                        <span>Open in UPI App Directly</span>
-                        <ExternalLink size={12} />
-                      </a>
+                      <div>
+                        <div className="text-xl font-extrabold font-mono text-emerald-300">
+                          {upiDetails.formattedAmount}
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">
+                          Scan with GPay / PhonePe / Paytm / Cred
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-400 mt-1">
+                          VPA: {upiDetails.vpa}
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-white/5">
+                        <a
+                          href={upiDetails.upiUri}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs font-mono text-[#e8520a] hover:underline"
+                        >
+                          <span>Open in UPI App Directly</span>
+                          <ExternalLink size={12} />
+                        </a>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* UTR Input Form */}
                   <div className="space-y-2">

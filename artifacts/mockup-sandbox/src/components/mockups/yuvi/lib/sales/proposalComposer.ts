@@ -314,7 +314,7 @@ export function generatePrintableA4Html(
         <div class="brand-title">YUGANTAR GROWTH</div>
         <div class="brand-tag">B2B Commercial Architecture & Revenue Systems</div>
         <div style="font-size: 9px; color: ${YUGANTAR_THEME.slate}; margin-top: 3px;">
-          Founder: ${founderName} · Ahmedabad, Gujarat · UPI: <b>${upiVpa}</b>
+          Founder: ${founderName} · Ahmedabad, Gujarat · UPI: <b>${upiVpa || "UPI not configured"}</b>
         </div>
       </div>
       <div style="text-align: right;">
@@ -372,7 +372,7 @@ export function generatePrintableA4Html(
       <div style="font-size: 9px; color: #555; max-width: 60%;">
         <b>Payment Terms:</b> ${proposal.paymentTerms}<br>
         <b>Advance Gate:</b> Project kick-off occurs immediately upon receipt of advance (₹${advanceAmount.toLocaleString("en-IN")}).<br>
-        <b>Instant UPI Payment:</b> <span style="font-family: monospace; font-weight: bold; color: #000;">${upiVpa}</span>
+        <b>Instant UPI Payment:</b> <span style="font-family: monospace; font-weight: bold; color: #000;">${upiVpa || "UPI not configured"}</span>
       </div>
       <div style="text-align: right; font-family: monospace; font-size: 10px; width: 140px;">
         <div style="display: flex; justify-content: space-between; color: #555;">

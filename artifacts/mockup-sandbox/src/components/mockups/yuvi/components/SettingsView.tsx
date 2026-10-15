@@ -691,7 +691,7 @@ export function SettingsView({
                     value={settings.payments?.upiVpa || ""}
                     onChange={e => setSettings(s => ({ ...s, payments: { ...(s.payments || {}), upiVpa: e.target.value } }))}
                     className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 p-2.5 text-xs text-white outline-none"
-                    placeholder="founder@upi"
+                    placeholder="e.g. founder@okhdfcbank"
                   />
                   <span className="text-[9px] text-slate-400 mt-0.5 block">Configured VPA for QR codes. Overridden by env `UPI_VPA` if present.</span>
                 </div>

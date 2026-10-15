@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-15T08:07:16.250Z",
+  "generatedAt": "2026-10-15T09:12:20.787Z",
   "client": {
     "companyName": "Kunal Jewels & Diamond Studio",
     "contactPerson": "Kunal Soni",
@@ -20,7 +20,7 @@
   "delivery": {
     "currentStage": "BUILD",
     "turnaroundHours": 48,
-    "deliveryDeadline": "2026-10-17T08:07:16.250Z",
+    "deliveryDeadline": "2026-10-17T09:12:20.787Z",
     "status": "ACTIVE"
   },
   "diagnostics": {

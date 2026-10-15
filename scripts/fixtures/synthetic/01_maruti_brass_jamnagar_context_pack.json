@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-15T08:07:16.246Z",
+  "generatedAt": "2026-10-15T09:12:20.784Z",
   "client": {
     "companyName": "Maruti Brass Works",
     "contactPerson": "Bhavin Patel",
@@ -20,7 +20,7 @@
   "delivery": {
     "currentStage": "BUILD",
     "turnaroundHours": 48,
-    "deliveryDeadline": "2026-10-17T08:07:16.245Z",
+    "deliveryDeadline": "2026-10-17T09:12:20.783Z",
     "status": "ACTIVE"
   },
   "diagnostics": {

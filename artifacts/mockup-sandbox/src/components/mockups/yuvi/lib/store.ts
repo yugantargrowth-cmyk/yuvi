@@ -165,7 +165,7 @@ export const DEFAULT_SETTINGS: YuviSettings = {
     proactivity: { "Proactive mode": true, "Daily briefing": true, "Important-event notifications": true, "Agent completion notifications": true, "Approval notifications": true, "Error notifications": true }
   },
   payments: {
-    upiVpa: "founder@upi",
+    upiVpa: "",
   },
   goal_amount: 25000,
   goal_period: "one-time",
@@ -212,7 +212,7 @@ export function loadSettings(): YuviSettings {
       proactivity: { ...DEFAULT_SETTINGS.identity.proactivity, ...(stored.identity?.proactivity || {}) }
     },
     payments: {
-      upiVpa: stored.payments?.upiVpa || "founder@upi",
+      upiVpa: stored.payments?.upiVpa || "",
     },
     goal_amount: stored.goal_amount !== undefined ? Number(stored.goal_amount) : 25000,
     goal_period: stored.goal_period || "one-time",

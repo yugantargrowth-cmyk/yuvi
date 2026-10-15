@@ -221,7 +221,7 @@ assert(a4Html.includes("margin: 10mm"), "Specifies tight 10mm print margin to fi
 assert(a4Html.includes(YUGANTAR_THEME.orange), "Uses Yugantar electric orange palette token (#e8520a)");
 assert(a4Html.includes(YUGANTAR_THEME.black), "Uses Yugantar deep black palette token (#080808)");
 assert(a4Html.includes(YUGANTAR_THEME.cream), "Uses Yugantar warm cream palette token (#f7f5f0)");
-const expectedVpa = getUpiVpa();
+const expectedVpa = getUpiVpa() || "UPI not configured";
 assert(a4Html.includes(expectedVpa), `Includes instant UPI payment gateway (${expectedVpa})`);
 const customVpaProposal = composeProposal(researchedLead, { gstRate: 0, upiVpa: "custom-billing@okhdfcbank" });
 assert(customVpaProposal.printHtml.includes("custom-billing@okhdfcbank"), "Supports dynamic custom UPI VPA override in proposal");

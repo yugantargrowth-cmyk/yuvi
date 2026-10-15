@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-15T08:07:16.253Z",
+  "generatedAt": "2026-10-15T09:12:20.790Z",
   "client": {
     "companyName": "Apex Dental & Implant Clinic",
     "contactPerson": "Dr. Parth Shah",
@@ -20,7 +20,7 @@
   "delivery": {
     "currentStage": "BUILD",
     "turnaroundHours": 48,
-    "deliveryDeadline": "2026-10-17T08:07:16.253Z",
+    "deliveryDeadline": "2026-10-17T09:12:20.790Z",
     "status": "ACTIVE"
   },
   "diagnostics": {

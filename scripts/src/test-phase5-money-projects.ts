@@ -50,9 +50,24 @@ const upiParams = {
   transactionRef: "INV-2026-001",
 };
 
-const upiUri = buildUpiUri(upiParams);
+// Test unconfigured behavior: blocks payment links and QR, shows 'UPI not configured'
+const unconfiguredUri = buildUpiUri(upiParams);
+assert(unconfiguredUri === "", "buildUpiUri returns empty string and blocks payment link when VPA is unconfigured");
+
+const unconfiguredQr = generateUpiQrDataUrl(unconfiguredUri);
+assert(unconfiguredQr === "", "generateUpiQrDataUrl returns empty string and blocks QR when URI is empty");
+
+const unconfiguredDetails = generateUpiPaymentDetails(upiParams);
+assert(unconfiguredDetails.vpa === "UPI not configured", "Payment details vpa indicates 'UPI not configured' when unconfigured");
+assert(unconfiguredDetails.upiUri === "", "Payment details upiUri is empty string (blocked) when unconfigured");
+assert(unconfiguredDetails.qrDataUrl === "", "Payment details qrDataUrl is empty string (blocked) when unconfigured");
+assert(unconfiguredDetails.formattedAmount === "₹12,500", "Rupee amount formatted with Indian grouping ₹12,500");
+
+// Test configured behavior with explicit VPA
+const configuredParams = { ...upiParams, vpa: "yugantar@okhdfcbank" };
+const upiUri = buildUpiUri(configuredParams);
 assert(upiUri.startsWith("upi://pay?"), "URI starts with standard NPCI protocol upi://pay?");
-assert(upiUri.includes(`pa=${encodeURIComponent(DEFAULT_UPI_CONFIG.vpa)}`), `URI includes payee VPA (${DEFAULT_UPI_CONFIG.vpa})`);
+assert(upiUri.includes(`pa=${encodeURIComponent("yugantar@okhdfcbank")}`), "URI includes payee VPA (yugantar@okhdfcbank)");
 assert(upiUri.includes("pn=Yugantar%20Growth"), "URI includes payee name Yugantar Growth");
 assert(upiUri.includes("am=12500"), "URI includes exact advance amount 12500");
 assert(upiUri.includes("cu=INR"), "URI specifies currency INR");
@@ -62,7 +77,8 @@ const qrData = generateUpiQrDataUrl(upiUri);
 assert(qrData.startsWith("data:image/svg+xml"), "QR generator yields valid SVG data URL");
 assert(qrData.includes("rect"), "QR SVG includes matrix positioning elements");
 
-const fullDetails = generateUpiPaymentDetails(upiParams);
+const fullDetails = generateUpiPaymentDetails(configuredParams);
+assert(fullDetails.vpa === "yugantar@okhdfcbank", "Payment details vpa matches configured VPA");
 assert(fullDetails.formattedAmount === "₹12,500", "Rupee amount formatted with Indian grouping ₹12,500");
 assert(fullDetails.upiUri === upiUri, "Payment details bundle matches generated URI");
 

@@ -235,14 +235,25 @@ assert(objectionScript.includes("Maruti Brass Works"), "Interpolated company nam
 // ------------------------------------------------------------------
 console.log("\nSTEP 7: Advance Payment Hard Gate & UPI Generator");
 
-// Generate UPI payment details
-const upiDetails = generateUpiPaymentDetails({
+// Test unconfigured behavior: blocks payment link and QR
+const unconfiguredUpi = generateUpiPaymentDetails({
   amount: proposal.advanceAmount || 0,
   note: `Advance: ${lead.companyName}`,
   transactionRef: proposal.proposalNumber,
 });
+assert(unconfiguredUpi.vpa === "UPI not configured", "Unconfigured UPI shows 'UPI not configured'");
+assert(unconfiguredUpi.upiUri === "", "Unconfigured UPI blocks direct payment link");
+assert(unconfiguredUpi.qrDataUrl === "", "Unconfigured UPI blocks QR generation");
 
-assert(upiDetails.upiUri.includes(`pa=${encodeURIComponent(DEFAULT_UPI_CONFIG.vpa)}`), `UPI URI specifies configured payee VPA (${DEFAULT_UPI_CONFIG.vpa})`);
+// Generate UPI payment details with configured VPA
+const upiDetails = generateUpiPaymentDetails({
+  amount: proposal.advanceAmount || 0,
+  note: `Advance: ${lead.companyName}`,
+  transactionRef: proposal.proposalNumber,
+  vpa: "yugantar@okhdfcbank",
+});
+
+assert(upiDetails.upiUri.includes(`pa=${encodeURIComponent("yugantar@okhdfcbank")}`), "UPI URI specifies configured payee VPA");
 assert(upiDetails.upiUri.includes("pn=Yugantar%20Growth"), "UPI URI specifies payee Yugantar Growth");
 assert(upiDetails.qrDataUrl.startsWith("data:image/svg+xml"), "Generated dynamic SVG QR code data URL");
 

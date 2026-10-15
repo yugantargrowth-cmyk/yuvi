@@ -5,7 +5,7 @@
   "crons": [
     {
       "path": "/api/cron/research",
-      "schedule": "*/10 * * * *"
+      "schedule": "30 22 * * *"
     }
   ],
   "rewrites": [

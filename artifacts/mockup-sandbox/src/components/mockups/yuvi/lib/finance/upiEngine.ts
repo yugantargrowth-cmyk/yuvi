@@ -11,7 +11,7 @@ let _runtimeCustomVpa: string | undefined;
 
 /**
  * Resolves the UPI VPA from explicit override, environment variable UPI_VPA,
- * or localStorage settings. Defaults cleanly to 'founder@upi'.
+ * or localStorage settings. Returns an empty string if not configured.
  */
 export function getUpiVpa(customVpa?: string): string {
   if (customVpa && customVpa.trim()) {
@@ -43,7 +43,7 @@ export function getUpiVpa(customVpa?: string): string {
       }
     } catch {}
   }
-  return "founder@upi";
+  return "";
 }
 
 export function setRuntimeUpiVpa(vpa?: string): void {
@@ -80,10 +80,13 @@ export interface UpiPaymentDetails {
 }
 
 /**
- * Builds standard NPCI UPI URI string.
+ * Builds standard NPCI UPI URI string. Returns empty string if VPA is unconfigured.
  */
 export function buildUpiUri(params: UpiPaymentRequest): string {
   const vpa = (params.vpa || DEFAULT_UPI_CONFIG.vpa).trim();
+  if (!vpa) {
+    return "";
+  }
   const payeeName = (params.payeeName || DEFAULT_UPI_CONFIG.payeeName).trim();
   const amount = Math.max(0, params.amount);
   const note = (params.note || "Project Advance").trim();
@@ -94,8 +97,12 @@ export function buildUpiUri(params: UpiPaymentRequest): string {
 
 /**
  * Generates an SVG QR code data URL using pure algorithmic SVG generation (offline safe).
+ * Returns empty string if UPI URI is empty.
  */
 export function generateUpiQrDataUrl(upiUri: string): string {
+  if (!upiUri || !upiUri.trim()) {
+    return "";
+  }
   // Pure offline vector QR preview representation
   // Encodes URI into a clean branded SVG matrix representation
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
@@ -148,14 +155,17 @@ export function generateUpiQrDataUrl(upiUri: string): string {
 
 /**
  * Assembles full payment details including direct URI, QR code, and Indian rupee formatting.
+ * If VPA is not configured, sets vpa to "UPI not configured", upiUri to "", and qrDataUrl to "".
  */
 export function generateUpiPaymentDetails(params: UpiPaymentRequest): UpiPaymentDetails {
-  const vpa = (params.vpa || DEFAULT_UPI_CONFIG.vpa).trim();
+  const rawVpa = (params.vpa || DEFAULT_UPI_CONFIG.vpa).trim();
   const payeeName = (params.payeeName || DEFAULT_UPI_CONFIG.payeeName).trim();
   const amount = Math.max(0, Math.round(params.amount));
   const note = params.note || "Project Advance Payment";
-  const upiUri = buildUpiUri({ ...params, vpa, payeeName, amount, note });
-  const qrDataUrl = generateUpiQrDataUrl(upiUri);
+  const isConfigured = Boolean(rawVpa);
+  const vpa = isConfigured ? rawVpa : "UPI not configured";
+  const upiUri = isConfigured ? buildUpiUri({ ...params, vpa: rawVpa, payeeName, amount, note }) : "";
+  const qrDataUrl = upiUri ? generateUpiQrDataUrl(upiUri) : "";
 
   const formattedAmount = `₹${amount.toLocaleString("en-IN")}`;
 

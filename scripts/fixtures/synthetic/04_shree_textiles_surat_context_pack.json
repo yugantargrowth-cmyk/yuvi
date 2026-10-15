@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-15T08:07:16.256Z",
+  "generatedAt": "2026-10-15T09:12:20.793Z",
   "client": {
     "companyName": "Shree Textile Traders",
     "contactPerson": "Kamlesh Shah",
@@ -20,7 +20,7 @@
   "delivery": {
     "currentStage": "BUILD",
     "turnaroundHours": 48,
-    "deliveryDeadline": "2026-10-17T08:07:16.256Z",
+    "deliveryDeadline": "2026-10-17T09:12:20.793Z",
     "status": "ACTIVE"
   },
   "diagnostics": {
