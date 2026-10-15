@@ -36,7 +36,8 @@ export interface NextActionCardData {
   actionPayload?: Record<string, unknown>;
 }
 
-export const MONTHLY_REVENUE_TARGET = 25000; // ₹25,000 monthly pilot revenue target
+export const DEFAULT_REVENUE_GOAL = 25000; // ₹25,000 one-time revenue target
+export const MONTHLY_REVENUE_TARGET = DEFAULT_REVENUE_GOAL; // retained for backward compatibility
 
 /**
  * Computes live metrics for the Today Command Center without fake mocks.
@@ -46,7 +47,7 @@ export function computeTodayMetrics(
   clients: ClientAccount[] = [],
   leads: NormalizedLead[] = [],
   approvals: ApprovalItem[] = [],
-  target: number = MONTHLY_REVENUE_TARGET,
+  target: number = DEFAULT_REVENUE_GOAL,
 ): TodayMetrics {
   // Sum verified collections from invoices + direct client advances
   const invoiceCollected = invoices.reduce((sum, inv) => sum + (inv.amountPaid || 0), 0);
@@ -93,8 +94,9 @@ export function computeTodayMetrics(
 export function generateMorningBriefing(
   metrics: TodayMetrics,
   founderName: string = "Shlok",
+  periodLabel: string = "Revenue Target",
 ): [string, string, string] {
-  const line1 = `Namaste ${founderName}! Month Target: ₹${metrics.collectedAmount.toLocaleString("en-IN")} of ₹${metrics.targetAmount.toLocaleString("en-IN")} collected (${metrics.progressPercentage}%).`;
+  const line1 = `Namaste ${founderName}! ${periodLabel}: ₹${metrics.collectedAmount.toLocaleString("en-IN")} of ₹${metrics.targetAmount.toLocaleString("en-IN")} collected (${metrics.progressPercentage}%).`;
   const line2 = `${metrics.dueOutreachCount} outbound touches ready for send · ${metrics.inboundRepliesCount} prospect replies awaiting action.`;
   const line3 = `${metrics.activeBuildsCount}/2 active builds in progress (WIP SLA safe) · ${metrics.pendingAdvancesCount} client advances awaiting UPI verification.`;
 

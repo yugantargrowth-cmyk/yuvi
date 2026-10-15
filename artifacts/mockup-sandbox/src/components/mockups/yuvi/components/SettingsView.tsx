@@ -672,6 +672,31 @@ export function SettingsView({
                 />
               </div>
 
+              <div className="grid gap-3 sm:grid-cols-2 pt-2 border-t border-white/5">
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-slate-400">Revenue Goal (₹ One-Time Target)</label>
+                  <input
+                    type="number"
+                    value={settings.goal_amount ?? 25000}
+                    onChange={e => setSettings(s => ({ ...s, goal_amount: Number(e.target.value) || 0, goal_period: "one-time" }))}
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 p-2.5 text-xs text-white outline-none"
+                    placeholder="25000"
+                  />
+                  <span className="text-[9px] text-slate-400 mt-0.5 block">Pilot revenue milestone: ₹25,000 one-time (not monthly).</span>
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-slate-400">Direct Payee UPI VPA</label>
+                  <input
+                    type="text"
+                    value={settings.payments?.upiVpa || ""}
+                    onChange={e => setSettings(s => ({ ...s, payments: { ...(s.payments || {}), upiVpa: e.target.value } }))}
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 p-2.5 text-xs text-white outline-none"
+                    placeholder="founder@upi"
+                  />
+                  <span className="text-[9px] text-slate-400 mt-0.5 block">Configured VPA for QR codes. Overridden by env `UPI_VPA` if present.</span>
+                </div>
+              </div>
+
               <div className="border-t border-white/5 pt-4 flex items-center justify-between">
                 <Button onClick={onLock}>
                   <Lock size={13} /> Lock Session

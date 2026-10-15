@@ -6,12 +6,13 @@
 import React, { useState } from "react";
 import type { NormalizedLead, ClientAccount, ClientInvoice } from "../lib/types/sales";
 import type { ApprovalItem } from "./ApprovalsView";
+import type { YuviSettings } from "../lib/store";
 import {
   computeTodayMetrics,
   generateMorningBriefing,
   determineNextAction,
   getActionQueues,
-  MONTHLY_REVENUE_TARGET,
+  DEFAULT_REVENUE_GOAL,
   type NextActionCardData,
 } from "../lib/today/todayEngine";
 import { PROJECT_STAGES } from "../lib/project/projectNavigator";
@@ -28,6 +29,7 @@ interface TodayViewProps {
   clients: ClientAccount[];
   leads: NormalizedLead[];
   approvals: ApprovalItem[];
+  settings?: YuviSettings;
   onNavigateToView: (view: any) => void;
   onSelectLead?: (lead: NormalizedLead) => void;
   onSelectClient?: (client: ClientAccount) => void;
@@ -40,6 +42,7 @@ export function TodayView({
   clients,
   leads,
   approvals,
+  settings,
   onNavigateToView,
   onSelectLead,
   onSelectClient,
@@ -48,8 +51,10 @@ export function TodayView({
 }: TodayViewProps) {
   const [activeQueueTab, setActiveQueueTab] = useState<"SEND" | "REPLY" | "MONEY" | "PROJECTS">("SEND");
 
-  const metrics = computeTodayMetrics(invoices, clients, leads, approvals, MONTHLY_REVENUE_TARGET);
-  const briefingLines = generateMorningBriefing(metrics, "Shlok");
+  const targetAmount = settings?.goal_amount ?? DEFAULT_REVENUE_GOAL;
+  const founderName = settings?.identity?.founderName || "Shlok";
+  const metrics = computeTodayMetrics(invoices, clients, leads, approvals, targetAmount);
+  const briefingLines = generateMorningBriefing(metrics, founderName, "Revenue Target");
   const nextAction = determineNextAction(clients, leads, approvals);
   const queues = getActionQueues(approvals, leads, clients);
   const sendingWindow = isWithinSendingWindow();
@@ -167,7 +172,7 @@ export function TodayView({
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-1.5 font-bold text-white">
             <Target size={14} className="text-emerald-400" />
-            <span>Month Revenue Goal: ₹{metrics.targetAmount.toLocaleString("en-IN")}</span>
+            <span>Revenue Goal (One-Time): ₹{metrics.targetAmount.toLocaleString("en-IN")}</span>
           </div>
           <span className="font-mono text-[10px] px-2 py-0.5 rounded font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
             {metrics.progressPercentage}% Achieved

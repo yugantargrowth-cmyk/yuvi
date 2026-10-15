@@ -8,7 +8,12 @@ import {
   determineNextAction,
   getActionQueues,
   MONTHLY_REVENUE_TARGET,
+  DEFAULT_REVENUE_GOAL,
 } from "../../artifacts/mockup-sandbox/src/components/mockups/yuvi/lib/today/todayEngine.js";
+import {
+  DEFAULT_SETTINGS,
+  loadSettings,
+} from "../../artifacts/mockup-sandbox/src/components/mockups/yuvi/lib/store.js";
 import type {
   NormalizedLead,
   ClientAccount,
@@ -34,10 +39,15 @@ console.log("=== PHASE 6: TODAY SCREEN & MOBILE-FIRST PWA TEST SUITE ===\n");
 // --- 1. Today Metrics & Revenue Target Progress ---
 console.log("1. Today Metrics & ₹25,000 Revenue Target Calculation");
 
-assert(MONTHLY_REVENUE_TARGET === 25000, "Monthly revenue target constant is exactly ₹25,000");
+assert(DEFAULT_REVENUE_GOAL === 25000, "Default revenue goal constant is exactly ₹25,000");
+assert(DEFAULT_SETTINGS.goal_amount === 25000, "settings.goal_amount defaults to ₹25,000");
+assert(DEFAULT_SETTINGS.goal_period === "one-time", "settings.goal_period is 'one-time' (not monthly)");
+const loadedSettings = loadSettings();
+assert(loadedSettings.goal_amount === 25000, "loadSettings resolves goal_amount ₹25,000");
+assert(loadedSettings.goal_period === "one-time", "loadSettings resolves goal_period 'one-time'");
 
 // Empty state
-const emptyMetrics = computeTodayMetrics([], [], [], []);
+const emptyMetrics = computeTodayMetrics([], [], [], [], loadedSettings.goal_amount);
 assert(emptyMetrics.targetAmount === 25000, "Target amount is ₹25,000");
 assert(emptyMetrics.collectedAmount === 0, "Initial collected amount is 0");
 assert(emptyMetrics.progressPercentage === 0, "Initial progress percentage is 0%");

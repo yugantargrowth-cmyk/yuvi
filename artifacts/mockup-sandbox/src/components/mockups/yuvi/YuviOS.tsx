@@ -772,6 +772,7 @@ export function YuviOS() {
             clients={clients}
             leads={leads}
             approvals={approvals}
+            settings={settings}
             onNavigateToView={navigateTo}
             onSelectLead={setSelectedLeadForDetail}
             onSelectClient={c => {

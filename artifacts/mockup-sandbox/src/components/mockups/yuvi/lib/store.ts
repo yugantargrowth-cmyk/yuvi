@@ -108,6 +108,11 @@ export type YuviSettings = {
     capabilities: Record<string, boolean>;
     proactivity: Record<string, boolean>;
   };
+  payments?: {
+    upiVpa?: string;
+  };
+  goal_amount: number;
+  goal_period: "one-time" | "monthly";
   lock: { passcodeDigest: string };
 };
 
@@ -159,6 +164,11 @@ export const DEFAULT_SETTINGS: YuviSettings = {
     capabilities: { Chat: true, "Proactive briefings": true, "Dashboard awareness": true, "Agent awareness": true, Navigation: true, Notifications: true, "Task management": true, Memory: true, Knowledge: true, Approvals: true },
     proactivity: { "Proactive mode": true, "Daily briefing": true, "Important-event notifications": true, "Agent completion notifications": true, "Approval notifications": true, "Error notifications": true }
   },
+  payments: {
+    upiVpa: "founder@upi",
+  },
+  goal_amount: 25000,
+  goal_period: "one-time",
   lock: { passcodeDigest: "" }
 };
 
@@ -201,6 +211,11 @@ export function loadSettings(): YuviSettings {
       capabilities: { ...DEFAULT_SETTINGS.identity.capabilities, ...(stored.identity?.capabilities || {}) },
       proactivity: { ...DEFAULT_SETTINGS.identity.proactivity, ...(stored.identity?.proactivity || {}) }
     },
+    payments: {
+      upiVpa: stored.payments?.upiVpa || "founder@upi",
+    },
+    goal_amount: stored.goal_amount !== undefined ? Number(stored.goal_amount) : 25000,
+    goal_period: stored.goal_period || "one-time",
     lock: { ...DEFAULT_SETTINGS.lock, ...(stored.lock || {}) }
   };
   // One-time migration: if the saved model id was a retired default, persist the
