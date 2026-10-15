@@ -198,6 +198,10 @@ import {
   type ResearchJob,
 } from "../../artifacts/mockup-sandbox/src/components/mockups/yuvi/lib/research/researchQueue.js";
 // @ts-ignore
+import app from "../../artifacts/api-server/src/app.js";
+// @ts-ignore
+import { enqueueServerResearchJobs } from "../../artifacts/api-server/src/routes/research.js";
+// @ts-ignore
 import cronHandlerRaw from "../../api/cron/research.js";
 const cronHandler = typeof cronHandlerRaw === "function" ? cronHandlerRaw : (cronHandlerRaw as any).default;
 
@@ -268,15 +272,57 @@ assert(doneJob?.evidenceCount === 3, "Job records completed evidenceCount");
 // Cron route security test
 process.env.CRON_SECRET = "secret_cron_token_test_123";
 
-// Helper to mock request/response
+// Spin up real Express server to test real route handler over actual HTTP
+const server = app.listen(0);
+const port = (server.address() as any).port;
+const baseUrl = `http://127.0.0.1:${port}`;
+
+// 1. Missing secret should be rejected with 401 on real route handler
+const unauthRes = await fetch(`${baseUrl}/api/cron/research`);
+assert(unauthRes.status === 401, "Real route handler rejects unauthenticated request with 401 Unauthorized");
+const unauthData = (await unauthRes.json()) as any;
+assert(unauthData?.ok === false, "Unauthenticated response payload has ok=false");
+
+// 2. Invalid secret should be rejected with 401 on real route handler
+const badAuthRes = await fetch(`${baseUrl}/api/cron/research`, {
+  headers: { authorization: "Bearer invalid_secret_123" },
+});
+assert(badAuthRes.status === 401, "Real route handler rejects invalid CRON_SECRET with 401");
+
+// 3. Authorized GET request (like Vercel Cron or GitHub Actions curl) succeeds and processes queued leads
+enqueueServerResearchJobs([lead1, lead2]);
+const validGetRes = await fetch(`${baseUrl}/api/cron/research`, {
+  headers: { authorization: "Bearer secret_cron_token_test_123" },
+});
+assert(validGetRes.status === 200, "Real route handler accepts valid CRON_SECRET with 200 OK on GET");
+const getData = (await validGetRes.json()) as any;
+assert(getData?.ok === true, "Authorized cron execution returns ok=true");
+assert(getData?.processedCount >= 2, "Real route handler processes queued leads automatically on GET");
+assert(getData?.batchLimit === 5, "Cron batch limit is capped at 5");
+assert(getData?.jobs?.[0]?.status === "DONE", "Cron job completes with status DONE");
+assert(getData?.jobs?.[0]?.evidence?.length >= 3, "Cron job attaches at least 3 verified evidence items");
+assert(getData?.jobs?.[0]?.evidence?.every((e: any) => e.label === "VERIFIED"), "Cron evidence is strictly labeled VERIFIED");
+
+// 4. Authorized POST request with payload
+const validPostRes = await fetch(`${baseUrl}/api/cron/research`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    authorization: "Bearer secret_cron_token_test_123",
+  },
+  body: JSON.stringify({ leads: [lead1, lead2], limit: 5 }),
+});
+assert(validPostRes.status === 200, "Real route handler accepts valid CRON_SECRET with 200 OK on POST");
+const postData = (await validPostRes.json()) as any;
+assert(postData?.processedCount === 2, "Real route handler processes provided leads on POST");
+
+server.close();
+
+// 5. Test Vercel serverless function directly
 function createMockReqRes(headers: Record<string, string>, body?: any) {
   let statusCode = 200;
   let responseData: any = null;
-  const req: any = {
-    method: "POST",
-    headers,
-    body,
-  };
+  const req: any = { method: "POST", headers, body };
   const res: any = {
     statusCode: 200,
     setHeader: () => {},
@@ -298,31 +344,17 @@ function createMockReqRes(headers: Record<string, string>, body?: any) {
   return { req, res, getStatusCode: () => statusCode, getResponseData: () => responseData };
 }
 
-// 1. Missing secret should be rejected with 401
 const unauth = createMockReqRes({});
 await cronHandler(unauth.req, unauth.res);
-assert(unauth.getStatusCode() === 401, "Cron route rejects unauthenticated request with 401 Unauthorized");
-assert(unauth.getResponseData()?.ok === false, "Unauthenticated response payload has ok=false");
+assert(unauth.getStatusCode() === 401, "Vercel serverless handler rejects unauthenticated request with 401");
 
-// 2. Invalid secret should be rejected with 401
-const badAuth = createMockReqRes({ authorization: "Bearer invalid_secret_123" });
-await cronHandler(badAuth.req, badAuth.res);
-assert(badAuth.getStatusCode() === 401, "Cron route rejects invalid CRON_SECRET with 401");
-
-// 3. Authorized request succeeds and processes 3-5 queued leads
 const validAuth = createMockReqRes(
   { authorization: "Bearer secret_cron_token_test_123" },
   { leads: [lead1, lead2], limit: 5 }
 );
 await cronHandler(validAuth.req, validAuth.res);
-assert(validAuth.getStatusCode() === 200, "Cron route accepts valid CRON_SECRET with 200 OK");
-const cronData = validAuth.getResponseData();
-assert(cronData?.ok === true, "Authorized cron execution returns ok=true");
-assert(cronData?.processedCount === 2, "Cron worker processes exactly 2 queued leads");
-assert(cronData?.batchLimit === 5, "Cron batch limit is capped at 5");
-assert(cronData?.jobs?.[0]?.status === "DONE", "Cron job completes with status DONE");
-assert(cronData?.jobs?.[0]?.evidence?.length >= 3, "Cron job attaches at least 3 verified evidence items");
-assert(cronData?.jobs?.[0]?.evidence?.every((e: any) => e.label === "VERIFIED"), "Cron evidence is strictly labeled VERIFIED");
+assert(validAuth.getStatusCode() === 200, "Vercel serverless handler accepts valid CRON_SECRET with 200 OK");
+assert(validAuth.getResponseData()?.ok === true, "Vercel serverless handler returns ok=true");
 
 console.log(`\n=== PHASE 2 SUITE COMPLETE: ${passed} passed, ${failed} failed ===`);
 if (failed > 0) {

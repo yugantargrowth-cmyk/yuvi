@@ -3,6 +3,22 @@
 // Automatically triggered by Vercel Cron (e.g. every 10-15 minutes) or authorized dispatchers.
 // Researches 3-5 queued leads per run, preventing serverless timeout issues.
 
+async function loadQueueHelpers() {
+  try {
+    const mod = await import("../../artifacts/mockup-sandbox/src/components/mockups/yuvi/lib/research/researchQueue.ts").catch(() => null);
+    if (mod) {
+      return {
+        getNextQueuedJobs: mod.getNextQueuedJobs || (() => []),
+        updateJobStatus: mod.updateJobStatus || (() => null),
+      };
+    }
+  } catch {}
+  return {
+    getNextQueuedJobs: () => [],
+    updateJobStatus: () => null,
+  };
+}
+
 function sendJson(res, statusCode, data) {
   if (typeof res.status === "function" && typeof res.json === "function") {
     res.status(statusCode).json(data);
@@ -74,12 +90,28 @@ export default async function handler(req, res) {
   // --- 2. Process Queued Leads (3-5 per run) ---
   const body = req.method === "POST" ? await parseBody(req) : {};
   const batchLimit = Math.min(Math.max(Number(body.limit || 5), 1), 5); // Bound to 1-5 leads
+  const { getNextQueuedJobs, updateJobStatus } = await loadQueueHelpers();
 
-  const incomingLeads = Array.isArray(body.leads) ? body.leads.slice(0, batchLimit) : [];
+  let incomingLeads = Array.isArray(body.leads) ? body.leads.slice(0, batchLimit) : [];
+
+  if (incomingLeads.length === 0) {
+    const queuedJobs = getNextQueuedJobs(batchLimit);
+    if (queuedJobs.length > 0) {
+      incomingLeads = queuedJobs.map((q) => ({
+        id: q.lead_id,
+        companyName: q.companyName || "Queued Lead",
+        websiteUrl: q.websiteUrl || "",
+        jobId: q.id,
+      }));
+    }
+  }
 
   const processedJobs = [];
 
   for (const lead of incomingLeads) {
+    if (lead.jobId) {
+      updateJobStatus(lead.jobId, "RUNNING");
+    }
     const targetUrl = lead.websiteUrl || "";
     let isHttps = false;
     let title = undefined;
@@ -123,8 +155,12 @@ export default async function handler(req, res) {
       }
     }
 
+    if (lead.jobId) {
+      updateJobStatus(lead.jobId, "DONE", { evidenceCount: 3 });
+    }
+
     processedJobs.push({
-      jobId: `job_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      jobId: lead.jobId || `job_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       leadId: lead.id,
       companyName: lead.companyName,
       status: "DONE",

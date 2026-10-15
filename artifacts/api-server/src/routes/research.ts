@@ -6,6 +6,48 @@ import { Router, type IRouter, type Request, type Response } from "express";
 
 const router: IRouter = Router();
 
+export interface ServerResearchJob {
+  id: string;
+  leadId: string;
+  companyName: string;
+  websiteUrl?: string;
+  status: "QUEUED" | "RUNNING" | "DONE" | "FAILED";
+  started_at?: string;
+  finished_at?: string;
+  evidence?: any[];
+}
+
+let serverResearchQueue: ServerResearchJob[] = [];
+
+export function enqueueServerResearchJobs(leads: Array<{ id: string; companyName: string; websiteUrl?: string }>): ServerResearchJob[] {
+  const activeLeadIds = new Set(
+    serverResearchQueue
+      .filter((j) => j.status === "QUEUED" || j.status === "RUNNING")
+      .map((j) => j.leadId)
+  );
+  for (const lead of leads) {
+    if (!activeLeadIds.has(lead.id)) {
+      serverResearchQueue.push({
+        id: `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        leadId: lead.id,
+        companyName: lead.companyName,
+        websiteUrl: lead.websiteUrl,
+        status: "QUEUED",
+      });
+      activeLeadIds.add(lead.id);
+    }
+  }
+  return serverResearchQueue;
+}
+
+export function getServerResearchQueue(): ServerResearchJob[] {
+  return serverResearchQueue;
+}
+
+export function clearServerResearchQueue(): void {
+  serverResearchQueue = [];
+}
+
 export interface ScanResult {
   ok: boolean;
   url: string;
@@ -370,10 +412,31 @@ async function handleCronResearch(req: Request, res: Response) {
 
   const { leads, limit = 5 } = req.body || {};
   const batchLimit = Math.min(Math.max(Number(limit), 1), 5);
-  const incomingLeads = Array.isArray(leads) ? leads.slice(0, batchLimit) : [];
+  let incomingLeads: Array<{ id: string; companyName: string; websiteUrl?: string; jobId?: string }> = Array.isArray(leads)
+    ? leads.slice(0, batchLimit)
+    : [];
+
+  if (incomingLeads.length === 0) {
+    const queuedJobs = serverResearchQueue.filter((j) => j.status === "QUEUED").slice(0, batchLimit);
+    if (queuedJobs.length > 0) {
+      incomingLeads = queuedJobs.map((q) => ({
+        id: q.leadId,
+        companyName: q.companyName || "Queued Lead",
+        websiteUrl: q.websiteUrl || "",
+        jobId: q.id,
+      }));
+    }
+  }
 
   const processedJobs = [];
   for (const lead of incomingLeads) {
+    if (lead.jobId) {
+      const qJob = serverResearchQueue.find((j) => j.id === lead.jobId);
+      if (qJob) {
+        qJob.status = "RUNNING";
+        qJob.started_at = new Date().toISOString();
+      }
+    }
     const targetUrl = lead.websiteUrl || "";
     let isHttps = false;
     let title = undefined;
@@ -397,39 +460,50 @@ async function handleCronResearch(req: Request, res: Response) {
       }
     }
 
+    const evidence = [
+      {
+        id: `ev_${Date.now()}_ssl`,
+        source: "website_scan",
+        claim: isHttps ? "Valid HTTPS SSL certificate active" : "Insecure HTTP protocol detected",
+        value: isHttps ? "HTTPS active" : "No SSL",
+        label: "VERIFIED",
+        confidence: 1.0,
+      },
+      {
+        id: `ev_${Date.now()}_cta`,
+        source: "website_scan",
+        claim: hasWhatsAppCta ? "1-click WhatsApp concierge CTA active" : "Missing instant 1-click WhatsApp CTA",
+        value: hasWhatsAppCta ? "CTA Present" : "Missing CTA",
+        label: "VERIFIED",
+        confidence: 1.0,
+      },
+      {
+        id: `ev_${Date.now()}_vp`,
+        source: "website_scan",
+        claim: hasMobileViewport ? "Mobile viewport meta tag configured" : "Unoptimized mobile viewport detected",
+        value: hasMobileViewport ? "Mobile optimized" : "Desktop only",
+        label: "VERIFIED",
+        confidence: 1.0,
+      },
+    ];
+
+    if (lead.jobId) {
+      const qJob = serverResearchQueue.find((j) => j.id === lead.jobId);
+      if (qJob) {
+        qJob.status = "DONE";
+        qJob.finished_at = new Date().toISOString();
+        qJob.evidence = evidence;
+      }
+    }
+
     processedJobs.push({
-      jobId: `job_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      jobId: lead.jobId || `job_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       leadId: lead.id,
       companyName: lead.companyName,
       status: "DONE",
       started_at: new Date(Date.now() - 2000).toISOString(),
       finished_at: new Date().toISOString(),
-      evidence: [
-        {
-          id: `ev_${Date.now()}_ssl`,
-          source: "website_scan",
-          claim: isHttps ? "Valid HTTPS SSL certificate active" : "Insecure HTTP protocol detected",
-          value: isHttps ? "HTTPS active" : "No SSL",
-          label: "VERIFIED",
-          confidence: 1.0,
-        },
-        {
-          id: `ev_${Date.now()}_cta`,
-          source: "website_scan",
-          claim: hasWhatsAppCta ? "1-click WhatsApp concierge CTA active" : "Missing instant 1-click WhatsApp CTA",
-          value: hasWhatsAppCta ? "CTA Present" : "Missing CTA",
-          label: "VERIFIED",
-          confidence: 1.0,
-        },
-        {
-          id: `ev_${Date.now()}_vp`,
-          source: "website_scan",
-          claim: hasMobileViewport ? "Mobile viewport meta tag configured" : "Unoptimized mobile viewport detected",
-          value: hasMobileViewport ? "Mobile optimized" : "Desktop only",
-          label: "VERIFIED",
-          confidence: 1.0,
-        },
-      ],
+      evidence,
     });
   }
 
