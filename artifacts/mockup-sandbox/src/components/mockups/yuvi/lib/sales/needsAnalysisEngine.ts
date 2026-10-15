@@ -204,19 +204,70 @@ export function analyzeLeadNeeds(lead: NormalizedLead): NeedsAnalysisResult {
   const topLeaks = detectedLeaks.slice(0, 3);
   const evidenceIds = topLeaks.map((l) => l.evidenceId);
 
-  // Prescribe catalog package based on identified bottlenecks
-  // Rule: Package mapper must default to Digital Foundation (₹7,999) for a first sale.
-  let prescribedPackage = YUGANTAR_CATALOG.digital_foundation;
+  // Evidence-driven package prescription:
+  // - No website / slow (>2.5s) / no WhatsApp CTA -> Digital Foundation (₹7,999)
+  // - Existing site + traffic/analytics signals / high review base -> Growth (₹14,999/mo)
+  const hasNoWebsite = !lead.websiteUrl;
+  const hasSlowSite = outboundEvidence.some((e) => e.source === "pagespeed" && (e.claim.includes("LCP") || e.value.includes("s")));
+  const hasNoWhatsApp = outboundEvidence.some((e) => e.source === "website" && e.value.includes("No WhatsApp CTA"));
+  const hasInsecureHttp = outboundEvidence.some((e) => e.source === "website" && e.value.includes("Insecure HTTP"));
+  const hasAnalyticsOrTraffic = outboundEvidence.some(
+    (e) => (e.source === "website" && e.claim.includes("Conversion tracking installed")) ||
+           (e.source === "places" && ((lead.reviewCount && lead.reviewCount >= 50) || e.value.includes("reviews"))) ||
+           (e.source === "social_snapshot" && e.value.includes("followers") && !e.value.includes("0 followers"))
+  );
+
+  let prescribedPackageBase = YUGANTAR_CATALOG.digital_foundation;
 
   if (lead.status === "WON" || (lead.notes && lead.notes.toLowerCase().includes("scale"))) {
-    prescribedPackage = YUGANTAR_CATALOG.scale;
-  } else if (lead.notes && (lead.notes.toLowerCase().includes("growth") || lead.notes.toLowerCase().includes("retainer"))) {
-    prescribedPackage = YUGANTAR_CATALOG.growth;
-  } else {
-    // Default strictly to Digital Foundation for a first sale
-    prescribedPackage = YUGANTAR_CATALOG.digital_foundation;
+    prescribedPackageBase = YUGANTAR_CATALOG.scale;
+  } else if (hasNoWebsite || hasSlowSite || hasNoWhatsApp || hasInsecureHttp || !hasAnalyticsOrTraffic) {
+    // Foundational infrastructure fixes needed first
+    prescribedPackageBase = YUGANTAR_CATALOG.digital_foundation;
+  } else if (hasAnalyticsOrTraffic || (lead.notes && (lead.notes.toLowerCase().includes("growth") || lead.notes.toLowerCase().includes("retainer")))) {
+    // Existing functioning site with active market presence -> Growth outbound engine
+    prescribedPackageBase = YUGANTAR_CATALOG.growth;
   }
 
+  // Generate dynamic line items and headline/scope text tailored from the lead's top findings
+  const tailoredDeliverables = topLeaks.map((leak) => `Direct resolution for ${leak.leak}`);
+  const combinedDeliverables = [
+    ...tailoredDeliverables,
+    ...prescribedPackageBase.deliverables,
+  ].slice(0, 5);
+
+  const topFindingSummary = topLeaks.map((l) => l.leak).join(" ");
+  const tailoredHeadline = topFindingSummary
+    ? `${prescribedPackageBase.headline} Tailored to eliminate: ${topLeaks[0]?.leak}`
+    : prescribedPackageBase.headline;
+
+  const dynamicItems: ProposalItem[] = topLeaks.length > 0
+    ? topLeaks.map((leak, idx) => ({
+        id: `item-${idx + 1}`,
+        description: `${prescribedPackageBase.name} Module: Fix ${leak.leak.slice(0, 90)}`,
+        quantity: 1,
+        unitPrice: idx === 0
+          ? prescribedPackageBase.pricing.amount - (topLeaks.length - 1) * Math.floor(prescribedPackageBase.pricing.amount / (topLeaks.length + 1))
+          : Math.floor(prescribedPackageBase.pricing.amount / (topLeaks.length + 1)),
+        amount: idx === 0
+          ? prescribedPackageBase.pricing.amount - (topLeaks.length - 1) * Math.floor(prescribedPackageBase.pricing.amount / (topLeaks.length + 1))
+          : Math.floor(prescribedPackageBase.pricing.amount / (topLeaks.length + 1)),
+      }))
+    : prescribedPackageBase.items;
+
+  // Ensure total sum equals the catalog package price
+  const totalItemSum = dynamicItems.reduce((acc, it) => acc + it.amount, 0);
+  if (totalItemSum !== prescribedPackageBase.pricing.amount && dynamicItems.length > 0) {
+    dynamicItems[0].amount += (prescribedPackageBase.pricing.amount - totalItemSum);
+    dynamicItems[0].unitPrice = dynamicItems[0].amount;
+  }
+
+  const prescribedPackage: PrescribedPackage = {
+    ...prescribedPackageBase,
+    headline: tailoredHeadline,
+    deliverables: combinedDeliverables,
+    items: dynamicItems,
+  };
 
   return {
     leadId: lead.id,
