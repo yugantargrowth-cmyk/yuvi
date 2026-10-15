@@ -121,6 +121,14 @@ export function ProposalsView({
       return;
     }
 
+    const outboundEvidence = (lead.researchEvidence || []).filter(
+      (e) => e.label === "VERIFIED" || e.label === "OBSERVED"
+    );
+    if (outboundEvidence.length < 2) {
+      notify(`Cannot save proposal: ${lead.companyName} has only ${outboundEvidence.length} verified/observed evidence item(s). Minimum 2 required. Run multi-source research or add a 20s Social Snapshot first.`);
+      return;
+    }
+
     const totals = calculateProposalTotals(items, taxRate);
     const template = PROPOSAL_TEMPLATES[selectedTemplateKey] || PROPOSAL_TEMPLATES.outbound_b2b;
 
@@ -129,14 +137,16 @@ export function ProposalsView({
     let advanceAmount = totals.totalAmount;
     let advancePercentage = 100;
 
+    let composed: any;
     try {
-      const composed = composeProposal(lead, { gstEnabled, gstRate: 18 });
+      composed = composeProposal(lead, { gstEnabled, gstRate: 18 });
       composedLeaks = composed.needsAnalysis.topLeaks;
       composedPitches = composed.pitches;
       advanceAmount = composed.proposal.advanceAmount || totals.totalAmount;
       advancePercentage = composed.proposal.advancePercentage || 100;
-    } catch {
-      // Offline fallback
+    } catch (err: any) {
+      notify(`Cannot save proposal: ${err?.message || String(err)}`);
+      return;
     }
 
     const newProp: CommercialProposal = {
