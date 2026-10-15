@@ -2,8 +2,8 @@
 // Manages QUEUED -> RUNNING -> DONE / FAILED lifecycle for leads undergoing multi-source research.
 // Supports both in-browser client execution with live progress and serverless / cron processing.
 
-import type { NormalizedLead } from "../types/sales";
-import { runMultiSourceResearch } from "./leadResearcher";
+import type { NormalizedLead } from "../types/sales.js";
+import { runMultiSourceResearch } from "./leadResearcher.js";
 
 export type ResearchJobStatus = "QUEUED" | "RUNNING" | "DONE" | "FAILED";
 
@@ -185,7 +185,7 @@ export async function executeResearchOnSelected(
         ...lead,
         status: lead.status === "NEW" ? "QUALIFIED" : lead.status,
         researchEvidence: result.evidence,
-        verifiedClaims: result.evidence.map((e) => e.claim),
+        verifiedClaims: result.evidence.map((e: any) => e.claim),
         updatedAt: new Date().toISOString(),
       };
 
