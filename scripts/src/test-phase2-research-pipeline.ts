@@ -356,6 +356,80 @@ await cronHandler(validAuth.req, validAuth.res);
 assert(validAuth.getStatusCode() === 200, "Vercel serverless handler accepts valid CRON_SECRET with 200 OK");
 assert(validAuth.getResponseData()?.ok === true, "Vercel serverless handler returns ok=true");
 
+// 6. Test Real Vercel Research Path Handlers (Item 1, 2, 3, 4 verification)
+console.log("\n6. Real Vercel Research Routes & Guardrail Verification");
+
+// @ts-ignore
+import scanHandlerRaw from "../../api/research/scan.js";
+// @ts-ignore
+import pageSpeedHandlerRaw from "../../api/research/pagespeed.js";
+// @ts-ignore
+import placesHandlerRaw from "../../api/research/places.js";
+// @ts-ignore
+import researchMultiplexerRaw from "../../api/research.js";
+
+const scanHandler = typeof scanHandlerRaw === "function" ? scanHandlerRaw : (scanHandlerRaw as any).default;
+const pageSpeedHandler = typeof pageSpeedHandlerRaw === "function" ? pageSpeedHandlerRaw : (pageSpeedHandlerRaw as any).default;
+const placesHandler = typeof placesHandlerRaw === "function" ? placesHandlerRaw : (placesHandlerRaw as any).default;
+const researchMultiplexer = typeof researchMultiplexerRaw === "function" ? researchMultiplexerRaw : (researchMultiplexerRaw as any).default;
+
+// Test scan handler missing url -> 400
+const scanReqMissing = createMockReqRes({}, {});
+await scanHandler(scanReqMissing.req, scanReqMissing.res);
+assert(scanReqMissing.getStatusCode() === 400, "Vercel scan handler rejects missing url with 400");
+
+// Test pagespeed handler without API key -> configured: false
+delete process.env.PAGESPEED_API_KEY;
+const psReq = createMockReqRes({}, { url: "https://example.com" });
+await pageSpeedHandler(psReq.req, psReq.res);
+assert(psReq.getStatusCode() === 200, "Vercel pagespeed handler returns 200");
+assert(psReq.getResponseData()?.configured === false, "Vercel pagespeed handler returns configured: false when key missing");
+
+// Test places handler without API key -> configured: false
+delete process.env.GOOGLE_PLACES_API_KEY;
+const placesReq = createMockReqRes({}, { companyName: "Karnavati Dental Care" });
+await placesHandler(placesReq.req, placesReq.res);
+assert(placesReq.getStatusCode() === 200, "Vercel places handler returns 200");
+assert(placesReq.getResponseData()?.configured === false, "Vercel places handler returns configured: false when key missing");
+
+// Test research multiplexer with action: scan
+const multiScanMissing = createMockReqRes({}, { action: "scan" });
+await researchMultiplexer(multiScanMissing.req, multiScanMissing.res);
+assert(multiScanMissing.getStatusCode() === 400, "Research multiplexer handles action 'scan' and rejects missing url");
+
+// Test research multiplexer with action: pagespeed
+const multiPs = createMockReqRes({}, { action: "pagespeed", url: "https://example.com" });
+await researchMultiplexer(multiPs.req, multiPs.res);
+assert(multiPs.getResponseData()?.configured === false, "Research multiplexer handles action 'pagespeed' and reports configured: false");
+
+// Test research multiplexer with action: places
+const multiPlaces = createMockReqRes({}, { action: "places", companyName: "Apex Forge" });
+await researchMultiplexer(multiPlaces.req, multiPlaces.res);
+assert(multiPlaces.getResponseData()?.configured === false, "Research multiplexer handles action 'places' and reports configured: false");
+
+// Test per-source status on runMultiSourceResearch
+const multiResult = await runMultiSourceResearch(lead1);
+assert(multiResult.sourceStatus !== undefined, "runMultiSourceResearch produces structured sourceStatus");
+assert(multiResult.sourceStatus.websiteScan !== undefined, "sourceStatus contains websiteScan status");
+assert(multiResult.sourceStatus.pageSpeed !== undefined, "sourceStatus contains pageSpeed status");
+assert(multiResult.sourceStatus.places !== undefined, "sourceStatus contains places status");
+assert(multiResult.lead.sourceStatus !== undefined, "Lead persists sourceStatus for UI inspection");
+
+// Test CSV rating/reviews labeled OBSERVED with imported <date>
+const csvLead: NormalizedLead = {
+  ...lead2,
+  id: "lead-csv-test",
+  rating: 4.6,
+  reviewCount: 38,
+  createdAt: "2026-10-15T00:00:00.000Z",
+  researchEvidence: [],
+};
+const csvResearch = await runMultiSourceResearch(csvLead);
+const csvPlacesEvidence = csvResearch.evidence.find((e) => e.source === "places");
+assert(csvPlacesEvidence !== undefined, "CSV rating generates places evidence item");
+assert(csvPlacesEvidence?.label === "OBSERVED", "CSV rating is strictly labeled OBSERVED (never VERIFIED)");
+assert(Boolean(csvPlacesEvidence?.claim.includes("imported 2026-10-15")), "CSV rating claims citation includes 'imported <date>'");
+
 console.log(`\n=== PHASE 2 SUITE COMPLETE: ${passed} passed, ${failed} failed ===`);
 if (failed > 0) {
   process.exit(1);

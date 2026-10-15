@@ -375,8 +375,6 @@ router.post("/api/research/places", async (req: Request, res: Response) => {
       rating: firstPlace.rating,
       reviewCount: firstPlace.userRatingCount,
       websiteUri: firstPlace.websiteUri,
-      phoneNumber: firstPlace.nationalPhoneNumber,
-      photoCount: Array.isArray(firstPlace.photos) ? firstPlace.photos.length : 0,
       isOpenNow: firstPlace.regularOpeningHours?.openNow,
       fetchedAt: new Date().toISOString(),
     });
@@ -387,6 +385,127 @@ router.post("/api/research/places", async (req: Request, res: Response) => {
       error: `Places request failed: ${err instanceof Error ? err.message : String(err)}`,
     });
   }
+});
+
+// POST /api/research — Multiplexed route handling { action: 'scan' | 'pagespeed' | 'places' }
+router.post("/api/research", async (req: Request, res: Response) => {
+  const { action = "scan" } = req.body || {};
+  if (action === "scan") {
+    const { url } = req.body || {};
+    if (!url || typeof url !== "string") {
+      res.status(400).json({ ok: false, error: "Missing required 'url' parameter in request body." });
+      return;
+    }
+    const result = await scanWebsite(url);
+    res.json(result);
+    return;
+  }
+
+  if (action === "pagespeed") {
+    const { url } = req.body || {};
+    if (!url || typeof url !== "string") {
+      res.status(400).json({ ok: false, error: "Missing required 'url' parameter in request body." });
+      return;
+    }
+    const apiKey = process.env.PAGESPEED_API_KEY?.trim();
+    if (!apiKey) {
+      res.json({
+        configured: false,
+        reason: "PAGESPEED_API_KEY is not configured on the server. Please add PAGESPEED_API_KEY to your environment variables.",
+      });
+      return;
+    }
+    let cleanUrl = url.trim();
+    if (!/^https?:\/\//i.test(cleanUrl)) cleanUrl = `https://${cleanUrl}`;
+    try {
+      const endpoint = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(cleanUrl)}&strategy=mobile&key=${apiKey}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000);
+      const apiRes = await fetch(endpoint, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!apiRes.ok) {
+        res.status(apiRes.status).json({ configured: true, ok: false, error: `PageSpeed API returned HTTP ${apiRes.status}` });
+        return;
+      }
+      const data = (await apiRes.json()) as any;
+      const lighthouse = data?.lighthouseResult;
+      res.json({
+        configured: true,
+        ok: true,
+        mobileScore: Math.round((lighthouse?.categories?.performance?.score ?? 0) * 100),
+        lcp: lighthouse?.audits?.["largest-contentful-paint"]?.displayValue ?? "N/A",
+        cls: lighthouse?.audits?.["cumulative-layout-shift"]?.displayValue ?? "N/A",
+        fcp: lighthouse?.audits?.["first-contentful-paint"]?.displayValue ?? "N/A",
+        fetchedAt: new Date().toISOString(),
+      });
+      return;
+    } catch (err) {
+      res.status(502).json({ configured: true, ok: false, error: `PageSpeed request failed: ${err instanceof Error ? err.message : String(err)}` });
+      return;
+    }
+  }
+
+  if (action === "places") {
+    const { companyName, city = "Ahmedabad", query: explicitQuery } = req.body || {};
+    const query = explicitQuery || `${companyName || ""} ${city}`.trim();
+    if (!query) {
+      res.status(400).json({ ok: false, error: "Missing 'companyName' or 'query' parameter." });
+      return;
+    }
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY?.trim();
+    if (!apiKey) {
+      res.json({
+        configured: false,
+        reason: "GOOGLE_PLACES_API_KEY is not configured on the server. Please add GOOGLE_PLACES_API_KEY to your environment variables.",
+      });
+      return;
+    }
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      const placesRes = await fetch("https://places.googleapis.com/v1/places:searchText", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": apiKey,
+          "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.websiteUri,places.nationalPhoneNumber,places.regularOpeningHours,places.photos",
+        },
+        body: JSON.stringify({ textQuery: query }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!placesRes.ok) {
+        const err = await placesRes.text().catch(() => "");
+        res.status(placesRes.status).json({ configured: true, ok: false, error: `Google Places API returned HTTP ${placesRes.status}: ${err.slice(0, 200)}` });
+        return;
+      }
+      const data = (await placesRes.json()) as any;
+      const firstPlace = data?.places?.[0];
+      if (!firstPlace) {
+        res.json({ configured: true, ok: false, reason: `No matching Google Place found for '${query}'.` });
+        return;
+      }
+      res.json({
+        configured: true,
+        ok: true,
+        placeName: firstPlace.displayName?.text,
+        address: firstPlace.formattedAddress,
+        rating: firstPlace.rating,
+        reviewCount: firstPlace.userRatingCount,
+        websiteUri: firstPlace.websiteUri,
+        phoneNumber: firstPlace.nationalPhoneNumber,
+        photoCount: Array.isArray(firstPlace.photos) ? firstPlace.photos.length : 0,
+        isOpenNow: firstPlace.regularOpeningHours?.openNow,
+        fetchedAt: new Date().toISOString(),
+      });
+      return;
+    } catch (err) {
+      res.status(502).json({ configured: true, ok: false, error: `Places request failed: ${err instanceof Error ? err.message : String(err)}` });
+      return;
+    }
+  }
+
+  res.status(400).json({ ok: false, error: `Unknown research action: '${action}'. Supported actions: scan, pagespeed, places.` });
 });
 
 // Cron Worker: /api/cron/research & /cron/research
