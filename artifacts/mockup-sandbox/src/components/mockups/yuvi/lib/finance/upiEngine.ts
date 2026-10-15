@@ -7,10 +7,59 @@ export interface UpiConfig {
   payeeName: string;
 }
 
+let _runtimeCustomVpa: string | undefined;
+
+/**
+ * Resolves the UPI VPA from explicit override, environment variable UPI_VPA,
+ * or localStorage settings. Defaults cleanly to 'founder@upi'.
+ */
+export function getUpiVpa(customVpa?: string): string {
+  if (customVpa && customVpa.trim()) {
+    return customVpa.trim();
+  }
+  if (_runtimeCustomVpa && _runtimeCustomVpa.trim()) {
+    return _runtimeCustomVpa.trim();
+  }
+  if (typeof process !== "undefined" && process.env?.UPI_VPA) {
+    return process.env.UPI_VPA.trim();
+  }
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== "undefined" && import.meta.env) {
+      // @ts-ignore
+      const metaVpa = import.meta.env.VITE_UPI_VPA || import.meta.env.UPI_VPA;
+      if (metaVpa) return String(metaVpa).trim();
+    }
+  } catch {}
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      const saved = window.localStorage.getItem("yuvi:settings");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const savedVpa = parsed?.payments?.upiVpa || parsed?.identity?.upiVpa || parsed?.upiVpa;
+        if (savedVpa && typeof savedVpa === "string" && savedVpa.trim()) {
+          return savedVpa.trim();
+        }
+      }
+    } catch {}
+  }
+  return "founder@upi";
+}
+
+export function setRuntimeUpiVpa(vpa?: string): void {
+  _runtimeCustomVpa = vpa;
+}
+
 export const DEFAULT_UPI_CONFIG: UpiConfig = {
-  vpa: "shlokpandya@oksbi",
+  get vpa() {
+    return getUpiVpa();
+  },
+  set vpa(val: string) {
+    _runtimeCustomVpa = val;
+  },
   payeeName: "Yugantar Growth",
 };
+
 
 export interface UpiPaymentRequest {
   amount: number;

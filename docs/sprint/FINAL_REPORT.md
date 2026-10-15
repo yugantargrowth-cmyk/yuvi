@@ -26,7 +26,7 @@ Through a disciplined 8-phase sequential progression (P0 to P7), YUVI has been c
 | **P2** | **Research Pipeline** | `sprint-p2-done` | `test:p2-research` | 24/24 | Real server audit scanner (`/api/research/scan`), Truth Provenance labels (`VERIFIED`, `OBSERVED`, `INFERRED`), 20s Social Snapshot, zero fake mocks. |
 | **P3** | **Needs Proposals** | `sprint-p3-done` | `test:p3-proposals` | 32/32 | `needs-analysis` skill linking leaks to Evidence IDs, Yugantar catalog selection, 1-page printable A4 HTML proposal, 6-line Hinglish WhatsApp pitch, GST math. |
 | **P4** | **Outreach Cadence** | `sprint-p4-done` | `test:p4-outreach` | 45/45 | D0->D2->D5 cadence, 30/day daily cap, 09:30-19:30 IST window, stop-on-reply automation, Indian B2B Objection Bank (5 objections), human send confirmation gate. |
-| **P5** | **Money & Projects** | `sprint-p5-done` | `test:p5-money-projects` | 51/51 | Dynamic NPCI UPI QR code generator (`shlokpandya@oksbi`), bank UTR checksum validation, Advance Payment Hard Gate, 7-stage linear project navigator, WIP=2 build limit, Context Pack compiler. |
+| **P5** | **Money & Projects** | `sprint-p5-done` | `test:p5-money-projects` | 51/51 | Dynamic NPCI UPI QR code generator (env `UPI_VPA` / settings), bank UTR checksum validation, Advance Payment Hard Gate, 7-stage linear project navigator, WIP=2 build limit, Context Pack compiler. |
 | **P6** | **Today Screen PWA**| `sprint-p6-done` | `test:p6-today-screen` | 43/43 | Mobile-first Today command center (390px viewport), morning executive briefing (3 lines), ₹25k monthly revenue target tracker, Single Next Action card, 4 action queues, thumb-ergonomic mobile bottom nav. |
 | **P7** | **E2E Hardening** | `sprint-p7-done` | `test:p7-e2e` | 49/49 | Master end-to-end integration test across P0-P6, real-data verification on 5 Gujarat accounts, operational runbook (`docs/RUNBOOK.md`), guardrail boundaries (`docs/KNOWN_LIMITS.md`). |
 
@@ -109,7 +109,7 @@ The system was executed on 5 realistic commercial accounts in Gujarat, generatin
    - Click "Open WhatsApp Web" to launch the prefilled 6-line Hinglish pitch.
    - Send message, return, and confirm "Mark as Sent".
 4. **Handle Objections:** Use the 5 Indian B2B scripts in the Objection Bank.
-5. **Collect Advances:** Send the dynamic UPI QR code (`shlokpandya@oksbi`) and enter the 12-digit UTR to unlock project kickoff.
+5. **Collect Advances:** Send the dynamic UPI QR code (configured via `UPI_VPA`) and enter the 12-digit UTR to unlock project kickoff.
 6. **Deliver within 48 Hours:** Respect the WIP=2 limit to deliver high-quality, sub-2.0s conversion engines for your clients.
 
 ---

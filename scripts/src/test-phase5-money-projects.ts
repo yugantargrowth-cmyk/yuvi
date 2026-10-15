@@ -52,7 +52,7 @@ const upiParams = {
 
 const upiUri = buildUpiUri(upiParams);
 assert(upiUri.startsWith("upi://pay?"), "URI starts with standard NPCI protocol upi://pay?");
-assert(upiUri.includes(`pa=${encodeURIComponent(DEFAULT_UPI_CONFIG.vpa)}`), "URI includes Shlok's VPA shlokpandya@oksbi");
+assert(upiUri.includes(`pa=${encodeURIComponent(DEFAULT_UPI_CONFIG.vpa)}`), `URI includes payee VPA (${DEFAULT_UPI_CONFIG.vpa})`);
 assert(upiUri.includes("pn=Yugantar%20Growth"), "URI includes payee name Yugantar Growth");
 assert(upiUri.includes("am=12500"), "URI includes exact advance amount 12500");
 assert(upiUri.includes("cu=INR"), "URI specifies currency INR");
@@ -65,6 +65,21 @@ assert(qrData.includes("rect"), "QR SVG includes matrix positioning elements");
 const fullDetails = generateUpiPaymentDetails(upiParams);
 assert(fullDetails.formattedAmount === "₹12,500", "Rupee amount formatted with Indian grouping ₹12,500");
 assert(fullDetails.upiUri === upiUri, "Payment details bundle matches generated URI");
+
+// Test env UPI_VPA override
+const prevEnvVpa = process.env.UPI_VPA;
+try {
+  process.env.UPI_VPA = "agency-payments@axisbank";
+  const envDetails = generateUpiPaymentDetails({ amount: 5000, note: "Test Env VPA" });
+  assert(envDetails.vpa === "agency-payments@axisbank", "Resolves UPI VPA dynamically from process.env.UPI_VPA");
+  assert(envDetails.upiUri.includes("pa=agency-payments%40axisbank"), "URI encodes process.env.UPI_VPA properly");
+} finally {
+  if (prevEnvVpa !== undefined) {
+    process.env.UPI_VPA = prevEnvVpa;
+  } else {
+    delete process.env.UPI_VPA;
+  }
+}
 
 // --- 2. Bank UTR Reference Validation ---
 console.log("\n2. Bank UTR Reference Validation");

@@ -4,6 +4,7 @@
 
 import type { NormalizedLead, CommercialProposal, ProposalItem } from "../types/sales";
 import { analyzeLeadNeeds, type NeedsAnalysisResult } from "./needsAnalysisEngine";
+import { getUpiVpa } from "../finance/upiEngine";
 
 export interface ComposedProposalOutput {
   proposal: CommercialProposal;
@@ -24,7 +25,9 @@ export interface ProposalCompositionOptions {
   customTerms?: string;
   advancePercentage?: number;
   founderName?: string;
+  upiVpa?: string;
 }
+
 
 export const YUGANTAR_THEME = {
   black: "#080808",
@@ -149,8 +152,14 @@ Phone: +91 98255 99887 | shlok@yugantargrowth.com`;
     },
   };
 
+  const upiVpa = getUpiVpa(options.upiVpa);
+  const founderName = options.founderName || "Shlok Pandya";
+
   // Generate 1-Page Printable A4 HTML
-  const printHtml = generatePrintableA4Html(proposal, analysis, advanceAmount);
+  const printHtml = generatePrintableA4Html(proposal, analysis, advanceAmount, {
+    founderName,
+    upiVpa,
+  });
 
   return {
     proposal,
@@ -173,7 +182,10 @@ export function generatePrintableA4Html(
   proposal: CommercialProposal,
   analysis: NeedsAnalysisResult,
   advanceAmount: number,
+  options?: { founderName?: string; upiVpa?: string } | string,
 ): string {
+  const upiVpa = typeof options === "string" ? options : getUpiVpa(options?.upiVpa);
+  const founderName = (typeof options === "object" && options?.founderName) || "Shlok Pandya";
   const leaksHtml = analysis.topLeaks
     .map(
       (l, idx) => `
@@ -302,7 +314,7 @@ export function generatePrintableA4Html(
         <div class="brand-title">YUGANTAR GROWTH</div>
         <div class="brand-tag">B2B Commercial Architecture & Revenue Systems</div>
         <div style="font-size: 9px; color: ${YUGANTAR_THEME.slate}; margin-top: 3px;">
-          Founder: Shlok Pandya · Ahmedabad, Gujarat · UPI: <b>shlokpandya@oksbi</b>
+          Founder: ${founderName} · Ahmedabad, Gujarat · UPI: <b>${upiVpa}</b>
         </div>
       </div>
       <div style="text-align: right;">
@@ -360,7 +372,7 @@ export function generatePrintableA4Html(
       <div style="font-size: 9px; color: #555; max-width: 60%;">
         <b>Payment Terms:</b> ${proposal.paymentTerms}<br>
         <b>Advance Gate:</b> Project kick-off occurs immediately upon receipt of advance (₹${advanceAmount.toLocaleString("en-IN")}).<br>
-        <b>Instant UPI Payment:</b> <span style="font-family: monospace; font-weight: bold; color: #000;">shlokpandya@oksbi</span>
+        <b>Instant UPI Payment:</b> <span style="font-family: monospace; font-weight: bold; color: #000;">${upiVpa}</span>
       </div>
       <div style="text-align: right; font-family: monospace; font-size: 10px; width: 140px;">
         <div style="display: flex; justify-content: space-between; color: #555;">

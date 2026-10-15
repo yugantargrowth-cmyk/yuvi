@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import type { CommercialProposal, NormalizedLead, ProposalItem } from "../lib/types/sales";
 import { PROPOSAL_TEMPLATES, createProposalFromLead, calculateProposalTotals, validateProposal } from "../lib/sales/proposalEngine";
 import { composeProposal, validateWhatsAppLineCount } from "../lib/sales/proposalComposer";
+import { getUpiVpa } from "../lib/finance/upiEngine";
 import { Button, Panel, ViewHeading } from "./ui";
 import {
   FileText, Plus, Download, Printer, CheckCircle2, XCircle, Send,
@@ -576,7 +577,7 @@ export function ProposalsView({
                       B2B Commercial Architecture & Revenue Systems
                     </div>
                     <div className="text-[10px] text-slate-500 mt-1">
-                      Founder: Shlok Pandya · Ahmedabad, Gujarat · UPI: <b className="font-mono text-black">shlokpandya@oksbi</b>
+                      Founder: Shlok Pandya · Ahmedabad, Gujarat · UPI: <b className="font-mono text-black">{getUpiVpa()}</b>
                     </div>
                   </div>
                   <div className="text-right">
@@ -679,7 +680,7 @@ export function ProposalsView({
                       <div>
                         <b>Advance Gate:</b> Project kick-off occurs immediately upon receipt of advance deposit (₹{(activeProposalForDoc.advanceAmount || activeProposalForDoc.totalAmount).toLocaleString("en-IN")}).
                       </div>
-                      <div><b>Direct UPI:</b> <span className="font-mono font-bold text-black">shlokpandya@oksbi</span></div>
+                      <div><b>Direct UPI:</b> <span className="font-mono font-bold text-black">{getUpiVpa()}</span></div>
                     </div>
                     <div className="w-48 space-y-1 font-mono text-xs text-right">
                       <div className="flex justify-between text-slate-600">

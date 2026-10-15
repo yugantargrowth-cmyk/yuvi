@@ -11,7 +11,7 @@
     "dev:ui": "pnpm --filter @workspace/mockup-sandbox run dev",
     "dev:api": "pnpm --filter @workspace/api-server run dev",
     "start:api": "pnpm --filter @workspace/api-server run start",
-    "test": "pnpm --filter @workspace/scripts run test:p0-rls && pnpm --filter @workspace/scripts run test:p1-lead-factory && pnpm --filter @workspace/scripts run test:sales && pnpm --filter @workspace/scripts run test:sprint3 && pnpm --filter @workspace/scripts run test:groq && pnpm --filter @workspace/scripts run test:crm-finance && pnpm --filter @workspace/scripts run test:autonomous",
+    "test": "pnpm --filter @workspace/scripts test",
     "test:p0-rls": "pnpm --filter @workspace/scripts run test:p0-rls",
     "test:p1-lead-factory": "pnpm --filter @workspace/scripts run test:p1-lead-factory",
     "test:sales": "pnpm --filter @workspace/scripts run test:sales",

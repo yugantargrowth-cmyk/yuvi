@@ -138,7 +138,7 @@
 1. Once scope is agreed upon, open the **Money Queue**.
 2. Click **Generate Payment Gate**:
    - YUVI renders a dynamic NPCI UPI URI and QR code:
-     - Payee VPA: `shlokpandya@oksbi`
+     - Payee VPA: Configured via `UPI_VPA` env var / settings (e.g. `founder@upi`)
      - Payee Name: `Yugantar Growth`
      - Exact advance amount (e.g. ₹14,750 or ₹29,500).
    - Share QR code or UPI link with the client.

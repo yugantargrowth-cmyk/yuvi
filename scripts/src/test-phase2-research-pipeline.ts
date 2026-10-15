@@ -197,6 +197,7 @@ import {
   updateJobStatus,
   type ResearchJob,
 } from "../../artifacts/mockup-sandbox/src/components/mockups/yuvi/lib/research/researchQueue.js";
+// @ts-ignore
 import cronHandlerRaw from "../../api/cron/research.js";
 const cronHandler = typeof cronHandlerRaw === "function" ? cronHandlerRaw : (cronHandlerRaw as any).default;
 
@@ -204,6 +205,12 @@ const cronHandler = typeof cronHandlerRaw === "function" ? cronHandlerRaw : (cro
 const lead1: NormalizedLead = {
   id: "lead-q1",
   companyName: "Karnavati Dental Care",
+  contactPerson: "Dr. Karnavati",
+  email: "info@karnavatidental.in",
+  industry: "Healthcare",
+  category: "Dental",
+  notes: "",
+  verifiedClaims: [],
   phone: "919825100001",
   websiteUrl: "https://karnavatidental.in",
   city: "Ahmedabad",
@@ -221,6 +228,12 @@ const lead1: NormalizedLead = {
 const lead2: NormalizedLead = {
   id: "lead-q2",
   companyName: "Gujarat Brass Forge",
+  contactPerson: "Rajesh Patel",
+  email: "sales@gujaratbrass.com",
+  industry: "Manufacturing",
+  category: "Brass",
+  notes: "",
+  verifiedClaims: [],
   phone: "919825100002",
   websiteUrl: "https://gujaratbrass.com",
   city: "Jamnagar",

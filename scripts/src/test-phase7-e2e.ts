@@ -39,6 +39,7 @@ import {
   generateUpiPaymentDetails,
   validateUpiReference,
   advancePaymentGate,
+  DEFAULT_UPI_CONFIG,
 } from "../../artifacts/mockup-sandbox/src/components/mockups/yuvi/lib/finance/upiEngine.js";
 import {
   STAGE_ORDER,
@@ -241,7 +242,7 @@ const upiDetails = generateUpiPaymentDetails({
   transactionRef: proposal.proposalNumber,
 });
 
-assert(upiDetails.upiUri.includes("pa=shlokpandya%40oksbi"), "UPI URI specifies Shlok's VPA shlokpandya@oksbi");
+assert(upiDetails.upiUri.includes(`pa=${encodeURIComponent(DEFAULT_UPI_CONFIG.vpa)}`), `UPI URI specifies configured payee VPA (${DEFAULT_UPI_CONFIG.vpa})`);
 assert(upiDetails.upiUri.includes("pn=Yugantar%20Growth"), "UPI URI specifies payee Yugantar Growth");
 assert(upiDetails.qrDataUrl.startsWith("data:image/svg+xml"), "Generated dynamic SVG QR code data URL");
 

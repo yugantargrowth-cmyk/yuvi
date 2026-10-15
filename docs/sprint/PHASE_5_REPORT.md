@@ -17,7 +17,7 @@ Phase 5 implements the financial guardrails and project delivery engine designed
 ## 2. Implemented Capabilities
 
 ### A. Advance Payment Hard Gate & UPI Engine (`lib/finance/upiEngine.ts`)
-- **NPCI UPI Protocol Generator**: Formats compliant `upi://pay?pa=shlokpandya@oksbi&pn=Yugantar%20Growth&am=${amount}&tn=${note}&cu=INR` deep links for instant mobile settlement via GPay, PhonePe, Paytm, or Cred.
+- **NPCI UPI Protocol Generator**: Formats compliant `upi://pay?pa=${vpa}&pn=Yugantar%20Growth&am=${amount}&tn=${note}&cu=INR` deep links for instant mobile settlement via GPay, PhonePe, Paytm, or Cred.
 - **Dynamic Vector QR Code Generator**: Offline algorithmic SVG generator producing high-contrast QR data URLs (`data:image/svg+xml`) rendered cleanly in the browser without third-party image dependencies.
 - **Bank UTR Validation**: Validates Indian banking transaction reference numbers (minimum 6 alphanumeric characters, normalized to uppercase alphanumeric).
 - **Advance Payment Hard Gate**: Strictly blocks advancing any project into the `BUILD` stage unless:

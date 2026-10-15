@@ -12,6 +12,7 @@ import {
   generatePrintableA4Html,
   YUGANTAR_THEME,
 } from "../../artifacts/mockup-sandbox/src/components/mockups/yuvi/lib/sales/proposalComposer.js";
+import { getUpiVpa } from "../../artifacts/mockup-sandbox/src/components/mockups/yuvi/lib/finance/upiEngine.js";
 import type { NormalizedLead } from "../../artifacts/mockup-sandbox/src/components/mockups/yuvi/lib/types/sales.js";
 import type { EvidenceItem } from "../../artifacts/mockup-sandbox/src/components/mockups/yuvi/lib/research/evidenceModel.js";
 
@@ -169,7 +170,6 @@ assert(analysis.prescribedPackage.pricing.amount === 7999, "Digital Foundation p
 assert(analysis.prescribedPackage.pricing.advancePercentage === 100, "Digital Foundation enforces 100% advance payment gate");
 
 // Verify Seeded Catalog Tiers
-import { YUGANTAR_CATALOG } from "../../artifacts/mockup-sandbox/src/components/mockups/yuvi/lib/sales/needsAnalysisEngine.js";
 assert(YUGANTAR_CATALOG.digital_foundation.pricing.amount === 7999, "Catalog has Digital Foundation at ₹7,999 one-time");
 assert(YUGANTAR_CATALOG.growth.pricing.amount === 14999, "Catalog has Growth at ₹14,999/mo");
 assert(YUGANTAR_CATALOG.scale.pricing.amount === 29999, "Catalog has Scale at ₹29,999/mo");
@@ -221,7 +221,10 @@ assert(a4Html.includes("margin: 10mm"), "Specifies tight 10mm print margin to fi
 assert(a4Html.includes(YUGANTAR_THEME.orange), "Uses Yugantar electric orange palette token (#e8520a)");
 assert(a4Html.includes(YUGANTAR_THEME.black), "Uses Yugantar deep black palette token (#080808)");
 assert(a4Html.includes(YUGANTAR_THEME.cream), "Uses Yugantar warm cream palette token (#f7f5f0)");
-assert(a4Html.includes("shlokpandya@oksbi"), "Includes instant UPI payment gateway (shlokpandya@oksbi)");
+const expectedVpa = getUpiVpa();
+assert(a4Html.includes(expectedVpa), `Includes instant UPI payment gateway (${expectedVpa})`);
+const customVpaProposal = composeProposal(researchedLead, { gstRate: 0, upiVpa: "custom-billing@okhdfcbank" });
+assert(customVpaProposal.printHtml.includes("custom-billing@okhdfcbank"), "Supports dynamic custom UPI VPA override in proposal");
 assert(a4Html.includes("Advance Gate:"), "Includes clear advance payment gate statement");
 assert(a4Html.includes("ev-ssl-101") || a4Html.includes("Ref:"), "Contains discrete evidence ID provenance citations");
 
