@@ -18,7 +18,7 @@
     "test:groq": "tsx ./src/test-groq-security.ts",
     "test:crm-finance": "tsx ./src/test-crm-delivery-finance.ts",
     "test:autonomous": "tsx ./src/test-autonomous-sprints.ts",
-    "demo:leads": "tsx ./src/generate-demo-leads.ts",
+    "fixtures:synthetic": "tsx ./src/generate-synthetic-fixtures.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

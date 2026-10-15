@@ -64,4 +64,4 @@ Phase 6 delivers the mobile-first **Today Command Center** (`TodayView.tsx`) tai
 ## 4. Sequential Gate & Git Tag
 
 - **Tag**: `sprint-p6-done`
-- **Next Phase**: Phase 7 — E2E Hardening & Release (Comprehensive end-to-end lifecycle verification test, real-data 5-lead verification, final runbook, known limits documentation, and final release gate).
+- **Next Phase**: Phase 7 — E2E Hardening & Release (Comprehensive end-to-end lifecycle verification test, synthetic test data verification on 5 fixtures, final runbook, known limits documentation, and final release gate).

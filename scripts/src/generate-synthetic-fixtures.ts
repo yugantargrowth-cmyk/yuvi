@@ -1,6 +1,7 @@
-// scripts/src/generate-demo-leads.ts
-// Executes the complete YUVI revenue engine across 5 authentic Gujarat commercial leads.
-// Emits production A4 proposals, WhatsApp pitches, UPI QR specs, and Client Context Packs.
+// scripts/src/generate-synthetic-fixtures.ts
+// Generates 5 synthetic test data fixtures modeled after representative Gujarat B2B commercial profiles.
+// NOTE: All accounts and records in this fixture are synthetic test data for automated testing.
+// They are NOT real, authentic, or verified client accounts.
 
 import * as fs from "fs";
 import * as path from "path";
@@ -22,7 +23,7 @@ interface TargetLeadSpec {
   utrRef: string;
 }
 
-const DEMO_LEADS: TargetLeadSpec[] = [
+const SYNTHETIC_TEST_LEADS: TargetLeadSpec[] = [
   {
     prefix: "01_maruti_brass_jamnagar",
     lead: {
@@ -322,18 +323,18 @@ const DEMO_LEADS: TargetLeadSpec[] = [
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const outDir = path.resolve(__dirname, "../../docs/sprint/demo");
+const outDir = path.resolve(__dirname, "../fixtures/synthetic");
 if (!fs.existsSync(outDir)) {
   fs.mkdirSync(outDir, { recursive: true });
 }
 
 console.log("==================================================================");
-console.log("🚀 GENERATING 5 REAL GUJARAT COMMERCIAL DEMO PIPELINE ARTIFACTS");
+console.log("🚀 GENERATING 5 SYNTHETIC TEST DATA FIXTURES");
 console.log("==================================================================\n");
 
 const summaryRows: string[] = [];
 
-for (const spec of DEMO_LEADS) {
+for (const spec of SYNTHETIC_TEST_LEADS) {
   const { prefix, lead, evidence, advancePaidPercentage, utrRef } = spec;
   lead.researchEvidence = evidence;
 
@@ -414,23 +415,16 @@ for (const spec of DEMO_LEADS) {
     `| **${lead.companyName}** | ${lead.city} | ${lead.industry} | ${needs.prescribedPackage.name} | ₹${proposal.totalAmount.toLocaleString("en-IN")} | ₹${(proposal.advanceAmount || 0).toLocaleString("en-IN")} (${advancePaidPercentage}%) | \`${utrRef}\` | [A4 HTML](${prefix}_proposal.html) · [Context Pack](${prefix}_context_pack.md) |`,
   );
 
-  console.log(`✅ Generated artifacts for ${lead.companyName} (${lead.city})`);
+  console.log(`✅ Generated synthetic fixtures for ${lead.companyName} (${lead.city})`);
 }
 
-const readmeContent = `# YUVI Operational Demo: 5 Authentic Gujarat Commercial Accounts
+const readmeContent = `# YUVI Synthetic Test Data Fixtures: 5 Gujarat Commercial Profiles
 
-This directory contains real-world operational artifacts produced autonomously by the **YUVI Operational Revenue Engine** for solo founder **Shlok Pandya** (**Yugantar Growth**, Ahmedabad).
+This directory contains synthetic test data fixtures produced for the **YUVI Operational Revenue Engine** testing suite.
 
-## Provenance & Integrity Guardrails Enforced:
-1. **Zero Fake Mocks:** All technical evidence is sourced from verified audit parameters (Core Web Vitals, HTTP protocol headers, DOM element verification, 20s manual social observation).
-2. **Strict Evidence Quarantine:** Subjective assumptions and projected revenue models are explicitly labeled \`INFERRED\` and quarantined from all client-facing pitches and proposals.
-3. **Printable 1-Page A4 Proposals:** Rendered with Yugantar Growth design palette (\`#080808\`, \`#e8520a\`, \`#f7f5f0\`), discrete Evidence ID links, and transparent GST breakdown.
-4. **Hinglish WhatsApp Outreach:** Strictly capped at **<= 6 lines** with founder identification and low-friction roadmap conversation ask.
-5. **Advance Payment Hard Gate & UPI:** Dynamic NPCI UPI QR code specifications and bank UTR tracking before work advances to the \`BUILD\` stage.
+> **DISCLAIMER:** All accounts, contact information, and business profiles in this directory are **synthetic test data fixtures** created solely for automated test suites and deterministic offline verification. None of these records represent real, authentic, or verified client accounts.
 
----
-
-## Verified Accounts Summary
+## Synthetic Fixture Accounts Summary
 
 | Company | City | Industry | Prescribed Package | Total Value (Inc GST) | Advance Required | Bank UTR Ref | Artifacts |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -438,8 +432,8 @@ ${summaryRows.join("\n")}
 
 ---
 
-Generated autonomously by YUVI Autonomous Revenue Engine.
+Generated autonomously by YUVI Synthetic Fixture Generator.
 `;
 
 fs.writeFileSync(path.join(outDir, "README.md"), readmeContent, "utf-8");
-console.log(`\n🎉 Successfully emitted 5 accounts to docs/sprint/demo/README.md!`);
+console.log(`\n🎉 Successfully emitted 5 synthetic fixtures to scripts/fixtures/synthetic/README.md!`);

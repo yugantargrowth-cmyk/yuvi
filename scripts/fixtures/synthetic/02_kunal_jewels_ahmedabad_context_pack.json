@@ -1,0 +1,50 @@
+{
+  "generatedAt": "2026-10-15T08:07:16.250Z",
+  "client": {
+    "companyName": "Kunal Jewels & Diamond Studio",
+    "contactPerson": "Kunal Soni",
+    "phone": "919825133445",
+    "email": "kunal@kunaljewels.in",
+    "websiteUrl": "https://kunaljewels.in",
+    "city": "Ahmedabad"
+  },
+  "commercials": {
+    "packageId": "digital_foundation",
+    "packageName": "Digital Foundation",
+    "contractValue": 9439,
+    "advancePaid": 9439,
+    "balanceDue": 0,
+    "utrReference": "428909876542",
+    "advanceVerified": true
+  },
+  "delivery": {
+    "currentStage": "BUILD",
+    "turnaroundHours": 48,
+    "deliveryDeadline": "2026-10-17T08:07:16.250Z",
+    "status": "ACTIVE"
+  },
+  "diagnostics": {
+    "primaryBottleneck": "Mobile page load latency and absence of WhatsApp CTA",
+    "verifiedEvidence": [
+      {
+        "claim": "Legacy desktop layout not optimized for smartphone touchscreens (pinch-to-zoom needed)",
+        "label": "OBSERVED",
+        "metric": "Legacy Desktop"
+      },
+      {
+        "claim": "Instagram profile has 12,500 followers with active reels but no direct WhatsApp bridge",
+        "label": "OBSERVED",
+        "metric": "Bio WhatsApp: No"
+      }
+    ],
+    "quarantinedInferred": [
+      {
+        "claim": "Estimated 40+ prospective bridal consultations lost per wedding season",
+        "label": "INFERRED"
+      }
+    ]
+  },
+  "scopeItems": [
+    "Digital Foundation: Mobile-First Conversion Engine & WhatsApp Concierge"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "generatedAt": "2026-10-15T08:07:16.256Z",
+  "client": {
+    "companyName": "Shree Textile Traders",
+    "contactPerson": "Kamlesh Shah",
+    "phone": "919825311223",
+    "email": "kamlesh@shreetextilesurat.com",
+    "websiteUrl": "https://shreetextilesurat.com",
+    "city": "Surat"
+  },
+  "commercials": {
+    "packageId": "digital_foundation",
+    "packageName": "Digital Foundation",
+    "contractValue": 9439,
+    "advancePaid": 4720,
+    "balanceDue": 4719,
+    "utrReference": "428909876544",
+    "advanceVerified": true
+  },
+  "delivery": {
+    "currentStage": "BUILD",
+    "turnaroundHours": 48,
+    "deliveryDeadline": "2026-10-17T08:07:16.256Z",
+    "status": "ACTIVE"
+  },
+  "diagnostics": {
+    "primaryBottleneck": "Mobile page load latency and absence of WhatsApp CTA",
+    "verifiedEvidence": [
+      {
+        "claim": "Mobile PageSpeed score is 28/100 with massive uncompressed catalog images",
+        "label": "VERIFIED",
+        "metric": "5.8s LCP"
+      },
+      {
+        "claim": "Zero Google Analytics or Meta Pixel event instrumentation for buyer tracking",
+        "label": "VERIFIED",
+        "metric": "No Analytics Installed"
+      },
+      {
+        "claim": "Wholesale inquiry form requires 12 mandatory fields with zero instant WhatsApp option",
+        "label": "OBSERVED",
+        "metric": "No WhatsApp CTA"
+      }
+    ],
+    "quarantinedInferred": []
+  },
+  "scopeItems": [
+    "Digital Foundation: Mobile-First Conversion Engine & WhatsApp Concierge"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "generatedAt": "2026-10-15T08:07:16.259Z",
+  "client": {
+    "companyName": "Dev Ceramic Industries",
+    "contactPerson": "Haresh Patel",
+    "phone": "919825499887",
+    "email": "haresh@devceramics.in",
+    "websiteUrl": "https://devceramics.in",
+    "city": "Morbi"
+  },
+  "commercials": {
+    "packageId": "digital_foundation",
+    "packageName": "Digital Foundation",
+    "contractValue": 9439,
+    "advancePaid": 4720,
+    "balanceDue": 4719,
+    "utrReference": "428909876545",
+    "advanceVerified": true
+  },
+  "delivery": {
+    "currentStage": "BUILD",
+    "turnaroundHours": 48,
+    "deliveryDeadline": "2026-10-17T08:07:16.259Z",
+    "status": "ACTIVE"
+  },
+  "diagnostics": {
+    "primaryBottleneck": "Mobile page load latency and absence of WhatsApp CTA",
+    "verifiedEvidence": [
+      {
+        "claim": "Tile catalog portal latency is 4.6s LCP on mobile viewports",
+        "label": "VERIFIED",
+        "metric": "4.6s LCP"
+      },
+      {
+        "claim": "No direct WhatsApp sample request concierge for architects and tile distributors",
+        "label": "OBSERVED",
+        "metric": "No WhatsApp CTA"
+      }
+    ],
+    "quarantinedInferred": [
+      {
+        "claim": "Estimated 25+ institutional distributor sample leads dropped every month",
+        "label": "INFERRED"
+      }
+    ]
+  },
+  "scopeItems": [
+    "Digital Foundation: Mobile-First Conversion Engine & WhatsApp Concierge"
+  ]
+}

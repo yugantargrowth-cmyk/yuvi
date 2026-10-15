@@ -59,10 +59,9 @@ activepieces/
 brahma_reference/
 *.pptx
 
-# Lead CSVs, raw prospect datasets and demo data
+# Lead CSVs and raw prospect datasets
 /data
 /data/*
 data/
 *.csv
-docs/sprint/demo/*
-!docs/sprint/demo/README.md
+

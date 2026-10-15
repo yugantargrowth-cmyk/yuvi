@@ -1,0 +1,50 @@
+{
+  "generatedAt": "2026-10-15T08:07:16.253Z",
+  "client": {
+    "companyName": "Apex Dental & Implant Clinic",
+    "contactPerson": "Dr. Parth Shah",
+    "phone": "919825222119",
+    "email": "drparth@apexdentalcare.com",
+    "websiteUrl": "http://apexdentalcare.com",
+    "city": "Ahmedabad"
+  },
+  "commercials": {
+    "packageId": "digital_foundation",
+    "packageName": "Digital Foundation",
+    "contractValue": 9439,
+    "advancePaid": 9439,
+    "balanceDue": 0,
+    "utrReference": "428909876543",
+    "advanceVerified": true
+  },
+  "delivery": {
+    "currentStage": "BUILD",
+    "turnaroundHours": 48,
+    "deliveryDeadline": "2026-10-17T08:07:16.253Z",
+    "status": "ACTIVE"
+  },
+  "diagnostics": {
+    "primaryBottleneck": "Mobile page load latency and absence of WhatsApp CTA",
+    "verifiedEvidence": [
+      {
+        "claim": "Website running on unencrypted HTTP protocol; browsers display 'Not Secure' warning",
+        "label": "VERIFIED",
+        "metric": "Insecure HTTP"
+      },
+      {
+        "claim": "No direct 1-click WhatsApp instant appointment booking CTA for dental emergencies",
+        "label": "VERIFIED",
+        "metric": "No WhatsApp CTA"
+      },
+      {
+        "claim": "Mobile loading latency is 5.2s on standard 4G network",
+        "label": "VERIFIED",
+        "metric": "5.2s LCP"
+      }
+    ],
+    "quarantinedInferred": []
+  },
+  "scopeItems": [
+    "Digital Foundation: Mobile-First Conversion Engine & WhatsApp Concierge"
+  ]
+}
