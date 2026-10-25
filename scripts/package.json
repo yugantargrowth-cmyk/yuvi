@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "tsx ./src/test-supabase-rls.ts && tsx ./src/test-phase1-lead-factory.ts && tsx ./src/test-phase2-research-pipeline.ts && tsx ./src/test-phase3-proposals.ts && tsx ./src/test-phase4-outreach.ts && tsx ./src/test-phase5-money-projects.ts && tsx ./src/test-phase6-today-screen.ts && tsx ./src/test-phase7-e2e.ts && tsx ./src/test-sales-engine.ts && tsx ./src/test-sprint3-verification.ts && tsx ./src/test-groq-security.ts && tsx ./src/test-crm-delivery-finance.ts && tsx ./src/test-autonomous-sprints.ts",
+    "test": "tsx ./src/test-supabase-rls.ts && tsx ./src/test-phase1-lead-factory.ts && tsx ./src/test-phase2-research-pipeline.ts && tsx ./src/test-phase3-proposals.ts && tsx ./src/test-phase4-outreach.ts && tsx ./src/test-phase5-money-projects.ts && tsx ./src/test-phase6-today-screen.ts && tsx ./src/test-phase7-e2e.ts && tsx ./src/test-sales-engine.ts && tsx ./src/test-sprint3-verification.ts && tsx ./src/test-groq-security.ts && tsx ./src/test-crm-delivery-finance.ts && tsx ./src/test-autonomous-sprints.ts && tsx ./src/test-agentic-loop.ts",
+    "test:agentic": "tsx ./src/test-agentic-loop.ts",
     "test:p0-rls": "tsx ./src/test-supabase-rls.ts",
     "test:p1-lead-factory": "tsx ./src/test-phase1-lead-factory.ts",
     "test:p2-research": "tsx ./src/test-phase2-research-pipeline.ts",

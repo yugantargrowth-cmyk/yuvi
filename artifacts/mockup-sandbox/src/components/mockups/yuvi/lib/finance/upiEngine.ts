@@ -1,6 +1,4 @@
-// lib/finance/upiEngine.ts — UPI Payment Gateway & Advance-Payment Hard Gate
-// Generates standard NPCI UPI deep links, dynamic SVG QR codes,
-// validates bank UTR references, and enforces the strict advance-payment rule.
+import { generateScannableQrSvg } from "./qrCode";
 
 export interface UpiConfig {
   vpa: string;
@@ -103,53 +101,7 @@ export function generateUpiQrDataUrl(upiUri: string): string {
   if (!upiUri || !upiUri.trim()) {
     return "";
   }
-  // Pure offline vector QR preview representation
-  // Encodes URI into a clean branded SVG matrix representation
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
-    <rect width="200" height="200" fill="#ffffff" rx="12"/>
-    <!-- Position Finder Pattern Top-Left -->
-    <rect x="20" y="20" width="40" height="40" fill="#080808" rx="4"/>
-    <rect x="28" y="28" width="24" height="24" fill="#ffffff"/>
-    <rect x="34" y="34" width="12" height="12" fill="#e8520a"/>
-    <!-- Position Finder Pattern Top-Right -->
-    <rect x="140" y="20" width="40" height="40" fill="#080808" rx="4"/>
-    <rect x="148" y="28" width="24" height="24" fill="#ffffff"/>
-    <rect x="154" y="34" width="12" height="12" fill="#e8520a"/>
-    <!-- Position Finder Pattern Bottom-Left -->
-    <rect x="20" y="140" width="40" height="40" fill="#080808" rx="4"/>
-    <rect x="28" y="148" width="24" height="24" fill="#ffffff"/>
-    <rect x="34" y="154" width="12" height="12" fill="#e8520a"/>
-    <!-- Simulated High-Density QR Data Matrix -->
-    <g fill="#1f2937">
-      <rect x="70" y="25" width="10" height="10"/>
-      <rect x="90" y="25" width="20" height="10"/>
-      <rect x="120" y="25" width="10" height="10"/>
-      <rect x="75" y="45" width="20" height="10"/>
-      <rect x="105" y="45" width="15" height="10"/>
-      <rect x="25" y="70" width="15" height="15"/>
-      <rect x="50" y="75" width="10" height="10"/>
-      <rect x="70" y="70" width="25" height="25" fill="#e8520a"/>
-      <rect x="105" y="70" width="25" height="15"/>
-      <rect x="140" y="75" width="15" height="10"/>
-      <rect x="165" y="70" width="15" height="15"/>
-      <rect x="30" y="95" width="20" height="10"/>
-      <rect x="60" y="105" width="15" height="15"/>
-      <rect x="85" y="100" width="30" height="15"/>
-      <rect x="125" y="95" width="20" height="20"/>
-      <rect x="155" y="105" width="25" height="10"/>
-      <rect x="70" y="125" width="15" height="15"/>
-      <rect x="95" y="125" width="20" height="25"/>
-      <rect x="125" y="135" width="15" height="15"/>
-      <rect x="75" y="155" width="25" height="15"/>
-      <rect x="110" y="150" width="15" height="20"/>
-      <rect x="135" y="160" width="30" height="15"/>
-      <rect x="175" y="145" width="10" height="25"/>
-    </g>
-    <!-- Center UPI Brand Pill -->
-    <rect x="80" y="86" width="40" height="28" rx="6" fill="#080808" stroke="#e8520a" stroke-width="2"/>
-    <text x="100" y="104" font-family="system-ui, sans-serif" font-size="11" font-weight="900" fill="#ffffff" text-anchor="middle">UPI</text>
-  </svg>`;
-
+  const svg = generateScannableQrSvg(upiUri.trim(), { size: 220, foreground: "#080808", background: "#ffffff" });
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 

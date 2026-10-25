@@ -3,19 +3,73 @@
 // Automatically triggered by Vercel Cron (e.g. every 10-15 minutes) or authorized dispatchers.
 // Researches 3-5 queued leads per run, preventing serverless timeout issues.
 
+// In-memory queue state for serverless execution and test runners
+let serverlessQueue = [];
+
+export function enqueueServerlessJob(job) {
+  serverlessQueue.push(job);
+}
+
+export function clearServerlessQueue() {
+  serverlessQueue = [];
+}
+
 async function loadQueueHelpers() {
-  try {
-    const mod = await import("../../artifacts/mockup-sandbox/src/components/mockups/yuvi/lib/research/researchQueue.ts").catch(() => null);
-    if (mod) {
+  // If Supabase credentials exist, we can also query the research_jobs table
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (supabaseUrl && serviceKey) {
+    try {
       return {
-        getNextQueuedJobs: mod.getNextQueuedJobs || (() => []),
-        updateJobStatus: mod.updateJobStatus || (() => null),
+        getNextQueuedJobs: async (limit) => {
+          try {
+            const res = await fetch(`${supabaseUrl}/rest/v1/research_jobs?status=eq.QUEUED&limit=${limit}`, {
+              headers: {
+                apikey: serviceKey,
+                Authorization: `Bearer ${serviceKey}`,
+              },
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data) && data.length > 0) return data;
+            }
+          } catch {}
+          return serverlessQueue.filter((j) => j.status === "QUEUED").slice(0, limit);
+        },
+        updateJobStatus: async (jobId, status, error) => {
+          const j = serverlessQueue.find((x) => x.id === jobId);
+          if (j) {
+            j.status = status;
+            if (error) j.error = error;
+            j.updated_at = new Date().toISOString();
+          }
+          try {
+            await fetch(`${supabaseUrl}/rest/v1/research_jobs?id=eq.${jobId}`, {
+              method: "PATCH",
+              headers: {
+                apikey: serviceKey,
+                Authorization: `Bearer ${serviceKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ status, error: error || null, updated_at: new Date().toISOString() }),
+            });
+          } catch {}
+        },
       };
-    }
-  } catch {}
+    } catch {}
+  }
+
   return {
-    getNextQueuedJobs: () => [],
-    updateJobStatus: () => null,
+    getNextQueuedJobs: (limit) => serverlessQueue.filter((j) => j.status === "QUEUED").slice(0, limit),
+    updateJobStatus: (jobId, status, error) => {
+      const j = serverlessQueue.find((x) => x.id === jobId);
+      if (j) {
+        j.status = status;
+        if (error) j.error = error;
+        j.updated_at = new Date().toISOString();
+      }
+    },
   };
 }
 

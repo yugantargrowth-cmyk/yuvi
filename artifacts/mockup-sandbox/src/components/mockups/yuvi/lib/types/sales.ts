@@ -415,6 +415,7 @@ export interface ApprovalItem {
   email?: string;
   leadId?: string;
   tier?: LeadTier;
+  cadenceStep?: "D0" | "D2" | "D5";
 }
 
 

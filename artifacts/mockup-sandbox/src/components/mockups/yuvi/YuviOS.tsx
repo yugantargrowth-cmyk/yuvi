@@ -47,6 +47,7 @@ import { createInvoiceFromProposal } from "./lib/sales/financeEngine";
 import { DEFAULT_AGENT_CONFIGS, DEFAULT_KNOWLEDGE_NODES, DEFAULT_AGENCY_SERVICES } from "./lib/agents/agentConfigEngine";
 import { auditLead } from "./lib/research/leadResearcher";
 import { syncAllTablesWithSupabase } from "./lib/supabaseClient";
+import { loadAllSkills } from "./lib/skillLoader";
 
 const VALID_VIEWS: View[] = [
   "Today",
@@ -502,6 +503,11 @@ export function YuviOS() {
   const [knowledgeNodes, setKnowledgeNodes] = useState<KnowledgeNode[]>(() => store.read("knowledge_nodes", DEFAULT_KNOWLEDGE_NODES));
   useEffect(() => { store.write("knowledge_nodes", knowledgeNodes); }, [knowledgeNodes]);
 
+  // Discover and register all bundled skills into SkillRegistry at startup
+  useEffect(() => {
+    loadAllSkills();
+  }, []);
+
   // Background Supabase 5-table auto-sync
   useEffect(() => {
     if (settings.supabase?.autoSync && settings.supabase?.url && settings.supabase?.anonKey) {
@@ -878,12 +884,19 @@ export function YuviOS() {
         return (
           <ChatView
             leads={leads}
+            setLeads={setLeads}
             callQueue={callQueue}
+            setCallQueue={setCallQueue}
             configs={agentConfigs}
             onUpdateConfigs={setAgentConfigs}
             invoices={invoices}
+            setInvoices={setInvoices}
             clients={clients}
+            setClients={setClients}
             proposals={proposals}
+            setProposals={setProposals}
+            approvals={approvals}
+            setApprovals={setApprovals}
             onTriggerEngine={triggerSalesEngine}
             settings={settings}
             notify={notify}

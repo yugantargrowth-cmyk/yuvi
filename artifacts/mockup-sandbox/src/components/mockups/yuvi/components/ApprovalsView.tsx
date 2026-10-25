@@ -50,16 +50,17 @@ export function ApprovalsView({
     if (leads && setLeads && item.leadId) {
       const targetLead = leads.find(l => l.id === item.leadId);
       if (targetLead) {
+        const step = item.cadenceStep || (targetLead.cadenceStep as "D0" | "D2" | "D5") || "D0";
         const { updatedLead } = confirmMarkAsSent(
           targetLead,
-          "D0",
+          step,
           `Approved dispatch via Gate: "${item.exactMessage?.slice(0, 100)}..."`
         );
         setLeads(leads.map(l => (l.id === item.leadId ? updatedLead : l)));
       }
     }
     setShowConfirmDialog(false);
-    notify("Sent confirmed! Status updated and cadence step advanced to D2.");
+    notify("Sent confirmed! Status updated and cadence step advanced.");
   };
 
   const cleanPhone = selected?.phone ? selected.phone.replace(/[^0-9]/g, "") : "";

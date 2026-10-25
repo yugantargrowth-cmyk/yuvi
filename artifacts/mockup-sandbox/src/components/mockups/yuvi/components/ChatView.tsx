@@ -1,5 +1,5 @@
-// components/ChatView.tsx — YUVI Conversational Orchestrator & Real Voice Chat
-import React, { useState, useRef, useEffect, type FormEvent } from "react";
+// components/ChatView.tsx — YUVI Conversational Orchestrator & Bounded Autonomous Agent
+import React, { useState, useRef, useEffect } from "react";
 import type {
   NormalizedLead,
   CallQueueItem,
@@ -8,17 +8,16 @@ import type {
   ClientInvoice,
   ClientAccount,
   CommercialProposal,
+  ApprovalItem,
 } from "../lib/types/sales";
 import type { YuviSettings } from "../lib/store";
-import { detectDailyIntent, handleDailyCommand } from "../lib/sales/intentRouter";
+import { runAgentLoop, type AgentPlanStep, type AgentExecutionReceipt } from "../lib/execution/agentLoop";
 import { parseConversationalAgentInstruction } from "../lib/agents/agentConfigEngine";
-import { completeWithGroq } from "../lib/groq";
 import { startListening, stopListening, speakText, stopSpeaking, isSpeechRecognitionSupported } from "../lib/voiceEngine";
-import { INITIAL_KNOWLEDGE_ARTICLES, buildKnowledgeContextPrompt } from "../lib/knowledgeBase";
-import { Button, Avatar, Panel, ViewHeading } from "./ui";
+import { Button, Avatar, Panel } from "./ui";
 import {
-  Send, Mic, MicOff, Volume2, VolumeX, Sparkles, Rocket,
-  Phone, Radio, Bot, Command, HelpCircle, SunMedium, Sliders
+  Send, Mic, MicOff, VolumeX, Rocket,
+  CheckCircle2, Clock, AlertTriangle, ArrowRight, ShieldCheck, Download
 } from "lucide-react";
 
 interface ChatMessage {
@@ -26,17 +25,27 @@ interface ChatMessage {
   role: "yuvi" | "user";
   text: string;
   timestamp: string;
+  plan?: AgentPlanStep[];
+  receipts?: AgentExecutionReceipt[];
+  navigationSuggestion?: "Leads" | "Approvals" | "Proposals" | "Pipeline" | "Today" | "Finance";
 }
 
 interface ChatViewProps {
   leads: NormalizedLead[];
+  setLeads?: (leads: NormalizedLead[]) => void;
   callQueue: CallQueueItem[];
+  setCallQueue?: (queue: CallQueueItem[]) => void;
   report?: DailySalesReport;
   configs?: AgentConfig[];
   onUpdateConfigs?: (configs: AgentConfig[]) => void;
   invoices?: ClientInvoice[];
+  setInvoices?: (invoices: ClientInvoice[]) => void;
   clients?: ClientAccount[];
+  setClients?: (clients: ClientAccount[]) => void;
   proposals?: CommercialProposal[];
+  setProposals?: (proposals: CommercialProposal[]) => void;
+  approvals?: ApprovalItem[];
+  setApprovals?: (approvals: ApprovalItem[]) => void;
   onTriggerEngine: () => void;
   settings: YuviSettings;
   notify: (text: string) => void;
@@ -45,13 +54,20 @@ interface ChatViewProps {
 
 export function ChatView({
   leads,
+  setLeads,
   callQueue,
+  setCallQueue,
   report,
   configs = [],
   onUpdateConfigs,
   invoices = [],
+  setInvoices,
   clients = [],
+  setClients,
   proposals = [],
+  setProposals,
+  approvals = [],
+  setApprovals,
   onTriggerEngine,
   settings,
   notify,
@@ -61,7 +77,7 @@ export function ChatView({
     {
       id: "init-01",
       role: "yuvi",
-      text: `Good day, ${settings.identity?.founderName || "Shlok"}. YUVI Brain is armed and monitoring the Gujarat commercial corridor.\n\nI can execute daily commands, coordinate Hunter and Scout, retrieve priority call queues, or answer questions about your pipeline.\n\nTry clicking any quick action below, typing your instruction, or tapping the microphone for hands-free voice control.`,
+      text: `Good day, ${settings.identity?.founderName || "Shlok"}. YUVI Autonomous Business Operator is ready.\n\nI can execute bounded operational missions: find relevant local businesses, research and score prospects, extract public contact details, draft evidence-backed proposals, prepare WhatsApp outreach sequences, and organize daily sales priorities.\n\nTry issuing any natural language instruction below, click a quick prompt, or use voice commands.`,
       timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
     },
   ]);
@@ -88,7 +104,7 @@ export function ChatView({
       timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
     };
 
-    setMessages(prev => [...prev, userMsg]);
+    setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsThinking(true);
 
@@ -105,7 +121,7 @@ export function ChatView({
         text: conversationalUpdate.replyMessage,
         timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
       };
-      setMessages(prev => [...prev, replyMsg]);
+      setMessages((prev) => [...prev, replyMsg]);
       if (settings.voice?.enabled) {
         setIsSpeaking(true);
         speakText(conversationalUpdate.replyMessage, {
@@ -118,141 +134,65 @@ export function ChatView({
       return;
     }
 
-    // 2. Check for Morning Revenue Diagnostic Briefing
-    const lowerClean = clean.toLowerCase();
-    const isMorningBriefing =
-      lowerClean.includes("morning briefing") ||
-      lowerClean.includes("morning diagnostic") ||
-      lowerClean.includes("revenue diagnostic") ||
-      lowerClean.includes("daily brief") ||
-      lowerClean.includes("revenue brief") ||
-      lowerClean.includes("morning brief");
+    // 2. Execute Bounded Observable Agent Loop
+    try {
+      const toolContext = {
+        leads,
+        setLeads,
+        proposals,
+        setProposals,
+        invoices,
+        setInvoices,
+        clients,
+        setClients,
+        callQueue,
+        setCallQueue,
+        approvals,
+        setApprovals,
+        founderName: settings.identity?.founderName || "Shlok",
+        upiVpa: settings.payments?.upiVpa || "shlok@upi",
+      };
 
-    if (isMorningBriefing) {
+      const loopResult = await runAgentLoop(clean, toolContext, {
+        personalityPrompt: settings.identity?.personalityPrompt,
+        modelId: settings.groq?.modelId,
+      });
+
       setIsThinking(false);
-      const uncontacted = leads.filter(l => l.status === "NEW");
-      const pendingCalls = callQueue.filter(c => c.callStatus === "PENDING");
-      const overdueInvoices = invoices.filter(i => i.status === "OVERDUE");
-      const overdueSum = overdueInvoices.reduce((acc, i) => acc + (i.balanceDue || 0), 0);
-      const activeRetainers = clients.reduce((acc, c) => acc + (c.monthlyRetainer || 0), 0);
-      const activeProposals = proposals.filter(p => p.status === "SENT" || p.status === "DRAFT");
-
-      const briefText = `☀️ **Good morning, ${settings.identity?.founderName || "Shlok"}. Here is your Executive Revenue Briefing:**
-
-📊 **Pipeline & Cash Telemetry:**
-• **Active Pipeline:** ${leads.length} accounts monitored across Gujarat (${leads.filter(l => l.tier === "A").length} Tier-A High Priority)
-• **Monthly Contract Retainers:** ₹${(activeRetainers / 100000).toFixed(1)}L/month currently active
-• **Uncontacted Accounts:** ${uncontacted.length} fresh leads awaiting Hunter WhatsApp pitches
-• **Pending Calls:** ${pendingCalls.length} discovery calls scheduled in queue
-• **Receivables Status:** ${overdueInvoices.length > 0 ? `₹${overdueSum.toLocaleString("en-IN")} overdue across ${overdueInvoices.length} invoices` : "Zero overdue invoices. All cash collections on track."}
-• **Open Proposals:** ${activeProposals.length} active quotations awaiting client signature
-
-🎯 **Yuvi's High-Margin Action Priorities for Today:**
-1. **Outreach:** Send 1-click WhatsApp pitches to ${uncontacted.slice(0, 3).map(l => l.companyName).join(", ") || "new pipeline accounts"}.
-2. **Audits:** Run Deep Researcher audits on Tier-A architects and clinics in Bodakdev & SG Highway.
-3. **Follow-ups:** Check in with pending proposals to close end-of-month deals.
-
-Ready to dispatch Hunter or review specific client proposals?`;
 
       const replyMsg: ChatMessage = {
         id: `yuv_${Date.now()}`,
         role: "yuvi",
-        text: briefText,
+        text: loopResult.report,
         timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+        plan: loopResult.plan,
+        receipts: loopResult.receipts,
+        navigationSuggestion: loopResult.navigationSuggestion,
       };
-      setMessages(prev => [...prev, replyMsg]);
+
+      setMessages((prev) => [...prev, replyMsg]);
 
       if (settings.voice?.enabled) {
         setIsSpeaking(true);
-        speakText(briefText, {
+        speakText(`Task completed. ${loopResult.understoodIntent}. ${loopResult.receipts.length} tool receipts verified.`, {
           rate: settings.voice?.rate ?? 1.05,
           onEnd: () => setIsSpeaking(false),
           onError: () => setIsSpeaking(false),
         });
       }
-      return;
+
+      notify(`Agent loop executed ${loopResult.plan.length} steps (${loopResult.durationMs}ms).`);
+    } catch (err) {
+      setIsThinking(false);
+      const errText = err instanceof Error ? err.message : String(err);
+      const replyMsg: ChatMessage = {
+        id: `yuv_${Date.now()}`,
+        role: "yuvi",
+        text: `⚠️ Execution error occurred while running agent loop:\n${errText}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+      };
+      setMessages((prev) => [...prev, replyMsg]);
     }
-
-    // 3. Check for Daily Command Intents
-    const intent = detectDailyIntent(clean);
-    if (intent !== "UNKNOWN") {
-      const result = handleDailyCommand(intent, { leads, callQueue, report, onTriggerEngine });
-      if (result.handled) {
-        setIsThinking(false);
-        const replyMsg: ChatMessage = {
-          id: `yuv_${Date.now()}`,
-          role: "yuvi",
-          text: result.replyText,
-          timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
-        };
-        setMessages(prev => [...prev, replyMsg]);
-
-        if (settings.voice?.enabled) {
-          setIsSpeaking(true);
-          speakText(result.replyText, {
-            rate: settings.voice?.rate ?? 1.05,
-            onEnd: () => setIsSpeaking(false),
-            onError: () => setIsSpeaking(false),
-          });
-        }
-        return;
-      }
-    }
-
-    // 2. Groq AI Generation with Full Live Context (via secure server-side /api/groq)
-    try {
-      const kbContext = buildKnowledgeContextPrompt(INITIAL_KNOWLEDGE_ARTICLES);
-      const systemPrompt = `${settings.identity.personalityPrompt}\n\n${settings.identity.customInstructions}\n\n=== LIVE CRM TELEMETRY ===\nTotal Leads in Radar: ${leads.length}\nQualified Leads (Tier A/B): ${leads.filter(l => l.tier === "A" || l.tier === "B").length}\nPending Phone Calls: ${callQueue.filter(c => c.callStatus === "PENDING").length}\nWon Deals: ${leads.filter(l => l.status === "WON").length}\n=== END TELEMETRY ===\n${kbContext}`;
-
-      const history = messages.slice(-5).map(m => ({
-        role: m.role === "yuvi" ? ("assistant" as const) : ("user" as const),
-        content: m.text,
-      }));
-
-      const res = await completeWithGroq(
-        [
-          { role: "system", content: systemPrompt },
-          ...history,
-          { role: "user", content: clean },
-        ],
-        settings.groq.modelId
-      );
-
-      if (res.ok) {
-        setIsThinking(false);
-        const replyMsg: ChatMessage = {
-          id: `yuv_${Date.now()}`,
-          role: "yuvi",
-          text: res.text,
-          timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
-        };
-        setMessages(prev => [...prev, replyMsg]);
-
-        if (settings.voice?.enabled) {
-          setIsSpeaking(true);
-          speakText(res.text, {
-            rate: settings.voice?.rate ?? 1.05,
-            onEnd: () => setIsSpeaking(false),
-            onError: () => setIsSpeaking(false),
-          });
-        }
-        return;
-      }
-    } catch {
-      // Fallback below
-    }
-
-    // 3. Deterministic Fallback Response
-    setIsThinking(false);
-    const offlineReply = `I received your command: "${clean}".\n\nSales Engine Status: Active with ${leads.length} leads in radar and ${callQueue.filter(c => c.callStatus === "PENDING").length} calls due.\n\nTo enable open natural-language reasoning, ensure GROQ_API_KEY is configured in your Vercel project environment variables. You can also run these direct commands right now:\n• "Work on my leads today"\n• "Give me todays calls"\n• "Prepare todays outreach"\n• "Show hot leads"\n• "What should I do today?"\n• "Give me todays sales report"`;
-
-    const replyMsg: ChatMessage = {
-      id: `yuv_${Date.now()}`,
-      role: "yuvi",
-      text: offlineReply,
-      timestamp: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
-    };
-    setMessages(prev => [...prev, replyMsg]);
   };
 
   const toggleListening = () => {
@@ -276,7 +216,7 @@ Ready to dispatch Hunter or review specific client proposals?`;
             handleSend(transcript.trim());
           }
         },
-        onError: err => {
+        onError: (err) => {
           setIsListening(false);
           notify(err);
         },
@@ -293,14 +233,13 @@ Ready to dispatch Hunter or review specific client proposals?`;
   };
 
   const quickCommands = [
-    "Morning Revenue Briefing",
-    "Yuvi, we now offer AI Receptionist for luxury clinics at ₹35,000/mo. Update the Researcher's service catalog and teach Hunter the new pitch angle",
+    "Find 50 dental clinics in Ahmedabad",
+    "Search luxury architects in Bodakdev",
+    "Research Jangid Furniture Studio",
+    "Draft 1-page proposal for Jangid Furniture",
+    "Draft WhatsApp outreach for top leads",
     "What should I do today?",
-    "Give me todays calls",
-    "Prepare todays outreach",
-    "Show hot leads",
-    "Run the sales engine",
-    "Give me todays sales report",
+    "Export leads to CSV",
   ];
 
   return (
@@ -308,10 +247,10 @@ Ready to dispatch Hunter or review specific client proposals?`;
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="text-[10px] uppercase tracking-wider text-violet-300 font-semibold">
-            YUVI / Conversational Orchestrator & Voice Interface
+            YUVI / Autonomous Business Operator & Multi-Step Agent Loop
           </div>
           <p className="mt-0.5 text-xs text-slate-400">
-            Natural language control plane for daily sales operations and AI workforce.
+            Issues multi-step autonomous missions: understand → plan → select registered tools → execute → verify receipts.
           </p>
         </div>
 
@@ -333,27 +272,80 @@ Ready to dispatch Hunter or review specific client proposals?`;
       {/* Main Chat Box */}
       <Panel className="flex flex-1 flex-col overflow-hidden min-h-[550px]">
         {/* Messages Feed */}
-        <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
-          {messages.map(m => {
+        <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
+          {messages.map((m) => {
             const isUser = m.role === "user";
             return (
               <div key={m.id} className={`flex gap-3 ${isUser ? "justify-end" : ""}`}>
-                <div className={`flex max-w-[85%] items-start gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
+                <div className={`flex max-w-[90%] md:max-w-[80%] items-start gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
                   <Avatar
                     text={isUser ? "SP" : "YU"}
                     color={isUser ? "#d59aff" : "#8b5cf6"}
                   />
-                  <div>
+                  <div className="space-y-2 flex-1">
                     <div
                       className={`rounded-2xl p-4 text-xs leading-relaxed whitespace-pre-wrap ${
                         isUser
                           ? "border border-violet-400/30 bg-violet-600/20 text-white"
-                          : "border border-white/10 bg-black/30 text-slate-200"
+                          : "border border-white/10 bg-black/40 text-slate-200 shadow-xl"
                       }`}
                     >
                       {m.text}
+
+                      {/* Render Structured Execution Plan */}
+                      {m.plan && m.plan.length > 0 && (
+                        <div className="mt-4 pt-3 border-t border-white/10 space-y-2">
+                          <div className="text-[10px] font-semibold uppercase tracking-wider text-violet-300 flex items-center gap-1.5">
+                            <ShieldCheck size={12} /> Bounded Execution Plan:
+                          </div>
+                          <div className="space-y-1.5">
+                            {m.plan.map((step) => (
+                              <div
+                                key={step.stepIndex}
+                                className="flex items-center justify-between rounded-lg bg-white/[0.04] px-3 py-1.5 text-[11px] border border-white/5"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-[10px] text-slate-400">#{step.stepIndex}</span>
+                                  <span className="font-semibold text-white">{step.toolName}</span>
+                                  <span className="text-slate-400 hidden sm:inline">— {step.rationale}</span>
+                                </div>
+                                <div>
+                                  {step.status === "COMPLETED" && (
+                                    <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+                                      <CheckCircle2 size={10} /> Verified
+                                    </span>
+                                  )}
+                                  {step.status === "RUNNING" && (
+                                    <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-400">
+                                      <Clock size={10} /> Running
+                                    </span>
+                                  )}
+                                  {step.status === "FAILED" && (
+                                    <span className="inline-flex items-center gap-1 rounded bg-rose-500/10 px-2 py-0.5 text-[10px] font-medium text-rose-400">
+                                      <AlertTriangle size={10} /> Failed
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Navigation CTA Button if suggested */}
+                      {m.navigationSuggestion && (
+                        <div className="mt-3 pt-2">
+                          <button
+                            onClick={() => onNavigate(m.navigationSuggestion)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/40 bg-violet-600/30 px-3 py-1.5 text-xs font-semibold text-violet-200 hover:bg-violet-600/50 transition-colors"
+                          >
+                            <span>Open in {m.navigationSuggestion}</span>
+                            <ArrowRight size={13} />
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    <div className={`mt-1 text-[9px] text-slate-500 ${isUser ? "text-right" : ""}`}>
+                    <div className={`text-[9px] text-slate-500 ${isUser ? "text-right" : ""}`}>
                       {m.timestamp}
                     </div>
                   </div>
@@ -365,9 +357,9 @@ Ready to dispatch Hunter or review specific client proposals?`;
           {isThinking && (
             <div className="flex items-center gap-3">
               <Avatar text="YU" color="#8b5cf6" />
-              <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-xs text-violet-200 flex items-center gap-2">
+              <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-xs text-violet-200 flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
-                <span>Consulting Gujarat sales radar and routing task...</span>
+                <span>Executing autonomous agent loop: Understanding → Planning → Executing Tools...</span>
               </div>
             </div>
           )}
@@ -377,8 +369,8 @@ Ready to dispatch Hunter or review specific client proposals?`;
 
         {/* Quick Command Pills */}
         <div className="border-t border-white/5 bg-black/20 px-4 py-2 flex items-center gap-2 overflow-x-auto">
-          <span className="text-[10px] uppercase font-semibold text-slate-500 shrink-0">Daily Prompts:</span>
-          {quickCommands.map(cmd => (
+          <span className="text-[10px] uppercase font-semibold text-slate-500 shrink-0">Daily Missions:</span>
+          {quickCommands.map((cmd) => (
             <button
               key={cmd}
               onClick={() => handleSend(cmd)}
@@ -390,51 +382,43 @@ Ready to dispatch Hunter or review specific client proposals?`;
         </div>
 
         {/* Input Bar */}
-        <div className="border-t border-white/10 p-3 sm:p-4 bg-[#070918]">
-          <div className="rounded-xl border border-violet-400/25 bg-black/40 p-2 focus-within:border-violet-400 transition-colors">
-            <textarea
+        <div className="border-t border-white/10 bg-black/40 p-3 sm:p-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSend();
+            }}
+            className="flex items-center gap-2"
+          >
+            <input
+              type="text"
               value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              placeholder={isListening ? "Listening... Speak now..." : "Tell YUVI what to do or ask about your sales pipeline..."}
-              className="h-16 w-full resize-none bg-transparent p-2 text-xs text-white outline-none placeholder:text-slate-600"
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Give YUVI an operational instruction (e.g. 'Find 50 clinics in Ahmedabad', 'Draft proposal for Jangid Furniture')..."
+              className="flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:border-violet-400/50 focus:outline-none"
             />
-
-            <div className="flex items-center justify-between border-t border-white/5 pt-2">
-              <div className="flex items-center gap-2">
-                {voiceSupported && (
-                  <button
-                    type="button"
-                    onClick={toggleListening}
-                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-                      isListening
-                        ? "bg-rose-500 text-white animate-pulse shadow-[0_0_15px_rgba(244,63,94,0.5)]"
-                        : "border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    {isListening ? <MicOff size={14} /> : <Mic size={14} />}
-                    <span>{isListening ? "Listening..." : "Voice Mic"}</span>
-                  </button>
-                )}
-                <span className="hidden text-[10px] text-slate-500 sm:inline">
-                  Enter to send · Groq GPT-OSS-120B Connected
-                </span>
-              </div>
-
-              <Button
-                variant="primary"
-                onClick={() => handleSend()}
-                disabled={!input.trim() || isThinking}
+            {voiceSupported && (
+              <button
+                type="button"
+                onClick={toggleListening}
+                className={`rounded-xl border p-2.5 transition-colors ${
+                  isListening
+                    ? "border-rose-400/50 bg-rose-500/20 text-rose-300 animate-pulse"
+                    : "border-white/10 bg-white/[0.04] text-slate-400 hover:text-white"
+                }`}
+                title={isListening ? "Listening... click to stop" : "Voice control"}
               >
-                <Send size={13} /> Send
-              </Button>
-            </div>
-          </div>
+                {isListening ? <MicOff size={16} /> : <Mic size={16} />}
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={!input.trim() || isThinking}
+              className="rounded-xl border border-violet-500/40 bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40 transition-colors"
+            >
+              <Send size={14} />
+            </button>
+          </form>
         </div>
       </Panel>
     </div>

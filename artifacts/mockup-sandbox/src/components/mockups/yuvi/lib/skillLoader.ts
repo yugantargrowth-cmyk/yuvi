@@ -1,26 +1,36 @@
-// lib/skillLoader.ts — auto-discovers skill modules under lib/skills/*/index.ts
-// at build time and registers each into skillRegistry.
-//
-// Equivalent in spirit to aa-os-yuvi/skills/skillLoader.js: drop a new
-// folder under skills/, it's found and registered automatically, no other
-// file needs editing to "wire it in." See lib/skills/types.ts for why this
-// uses import.meta.glob instead of the original's runtime <script> injection.
-//
-// What's carried over from the original loader:
-//  - manifest validation (via lib/security.ts validateSkillManifest)
-//  - dependency check (skill's declared deps must already be enabled)
-//  - circular dependency detection
-//  - a load report or console-visible reason for every skill that fails
-// What's dropped because it doesn't apply to a bundled app:
-//  - version-compat check against a fetched installed.json (there's no
-//    separate "platform version" for bundled code — the skill ships with
-//    whatever app version it's compiled into)
-//  - script load timeout (nothing is fetched at runtime, so nothing hangs)
+// lib/skillLoader.ts — auto-discovers and registers bundled skill modules into skillRegistry.
 
 import { register, isEnabled, type SkillManifest } from "./skillRegistry";
 import { validateSkillManifest } from "./security";
 import { emit } from "./eventBus";
 import type { SkillModule } from "./skills/types";
+
+// Bundled skill modules
+import leadResearchSkill from "./skills/lead-research/index";
+import leadTriageSkill from "./skills/lead-triage/index";
+import deepResearchSkill from "./skills/deep-research/index";
+import needsAnalysisSkill from "./skills/needs-analysis/index";
+import proposalComposeSkill from "./skills/proposal-compose/index";
+import outreachSequenceSkill from "./skills/outreach-sequence/index";
+import replyAssistSkill from "./skills/reply-assist/index";
+import projectNextActionSkill from "./skills/project-next-action/index";
+import collectionsNudgeSkill from "./skills/collections-nudge/index";
+import dailyPlanSkill from "./skills/daily-plan/index";
+import businessDiscoverySkill from "./skills/business-discovery/index";
+
+export const STATIC_BUNDLED_SKILLS: SkillModule[] = [
+  leadResearchSkill,
+  leadTriageSkill,
+  deepResearchSkill,
+  needsAnalysisSkill,
+  proposalComposeSkill,
+  outreachSequenceSkill,
+  replyAssistSkill,
+  projectNextActionSkill,
+  collectionsNudgeSkill,
+  dailyPlanSkill,
+  businessDiscoverySkill,
+];
 
 export interface SkillLoadReportEntry {
   skill_id: string;
@@ -79,21 +89,28 @@ function loadOne(mod: SkillModule, allDeps: Record<string, string[]>): boolean {
 }
 
 /**
- * Discovers every skills/<id>/index.ts module bundled into the app and
- * registers it. Call once at app startup (see YuviOS.tsx init).
+ * Discovers and registers bundled skill modules into skillRegistry.
  */
 export function loadAllSkills(): SkillLoadReportEntry[] {
   loadReport.length = 0;
 
-  // Eager glob: skill modules are small and always needed, so no lazy-load
-  // benefit here — and eager keeps registration synchronous/predictable.
-  const modules = import.meta.glob<SkillModule>("./skills/*/index.ts", { eager: true });
+  // Use Vite import.meta.glob if in bundler; fallback to STATIC_BUNDLED_SKILLS in Node.js / tests
+  let skillModules: SkillModule[] = STATIC_BUNDLED_SKILLS;
+  try {
+    if (typeof import.meta !== "undefined" && typeof (import.meta as any).glob === "function") {
+      const globbed = (import.meta as any).glob("./skills/*/index.ts", { eager: true });
+      const values = Object.values(globbed) as SkillModule[];
+      if (values.length > 0) {
+        skillModules = values;
+      }
+    }
+  } catch {}
 
   const allDeps: Record<string, string[]> = {};
   let loaded = 0;
   let errors = 0;
 
-  for (const mod of Object.values(modules)) {
+  for (const mod of skillModules) {
     const ok = loadOne(mod, allDeps);
     if (ok) loaded++;
     else errors++;
